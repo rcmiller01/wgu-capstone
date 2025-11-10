@@ -16,6 +16,7 @@ models/*
 !models/.gitkeep
 reports/*
 !reports/.gitkeep
+!reports/*.md
 reports/figures/*
 !reports/figures/.gitkeep
 .DS_Store
