@@ -1,0 +1,116 @@
+name: Project Sync
+on:
+  issues:
+    types: [opened, labeled]
+  workflow_dispatch:
+
+jobs:
+  add_to_project:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: read
+      contents: read
+      pull-requests: read
+      id-token: write
+    steps:
+      - name: Add issue to project
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = 'rcmiller01';
+            const title = 'Capstone Plan';
+
+            // find project number by title
+            const { data: projects } = await github.request('GET /users/{username}/projects', {
+              username: owner,
+              headers: { 'X-GitHub-Api-Version': '2022-11-28' }
+            }).catch(() => ({ data: [] }));
+
+            // Fallback to GraphQL Projects v2
+            const result = await github.graphql(`
+              query($login: String!) {
+                user(login: $login) {
+                  projectsV2(first: 20) { nodes { title number id } }
+                }
+              }`,
+              { login: owner }
+            );
+            const node = result.user.projectsV2.nodes.find(p => p.title === title);
+            if (!node) {
+              core.setFailed('Project not found: ' + title);
+              return;
+            }
+
+            // add current issue to project
+            const issueNode = await github.graphql(`
+              query($owner:String!,$repo:String!,$num:Int!){
+                repository(owner:$owner, name:$repo){
+                  issue(number:$num){ id labels(first:50){nodes{name}} url }
+                }
+              }`, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                num: context.issue.number
+              });
+
+            const issueId = issueNode.repository.issue.id;
+            await github.graphql(`
+              mutation($projectId:ID!, $contentId:ID!){
+                addProjectV2ItemById(input:{ projectId:$projectId, contentId:$contentId }){
+                  item { id }
+                }
+              }`, { projectId: node.id, contentId: issueId });
+
+            // Set Phase/Priority based on labels
+            const labels = (issueNode.repository.issue.labels?.nodes || []).map(l => l.name);
+            const phase = labels.find(l => l.startsWith('phase:')) || null;
+            const prio  = labels.find(l => l.startsWith('priority:'))?.replace('priority:','') || null;
+
+            // Fetch fields and options
+            const fields = await github.graphql(`
+              query($id:ID!){
+                node(id:$id){
+                  ... on ProjectV2 {
+                    fields(first:50){ nodes{ id name dataType
+                      ... on ProjectV2SingleSelectField { options { id name } }
+                    }}
+                  }
+                }
+              }`, { id: node.id });
+
+            const fNodes = fields.node.fields.nodes;
+            function setSingle(name, value) {
+              const field = fNodes.find(f => f.name === name);
+              if (!field || !value) return null;
+              const opt = (field.options || []).find(o => o.name === value || o.name === value.toUpperCase());
+              if (!opt) return null;
+              return { fieldId: field.id, optionId: opt.id };
+            }
+            const phaseSet = setSingle('Phase', phase);
+            const prioSet  = setSingle('Priority', prio);
+
+            // Get the just-added item id
+            const items = await github.graphql(`
+              query($proj:ID!, $cid:ID!){
+                node(id:$proj){ ... on ProjectV2 {
+                  items(first:50, query:"${context.payload.issue.html_url}") { nodes { id content { ... on Issue { id url } } } }
+                } }
+              }`, { proj: node.id, cid: issueId });
+
+            const item = items.node.items.nodes.find(n => n.content?.id === issueId);
+            if (item && (phaseSet || prioSet)) {
+              await github.graphql(`
+                mutation($projectId:ID!, $itemId:ID!, $fields:[ProjectV2FieldValueInput!]!){
+                  updateProjectV2ItemFieldValues(input:{ projectId:$projectId, itemId:$itemId, fieldValues:$fields }) {
+                    projectV2Item { id }
+                  }
+                }
+              `, {
+                projectId: node.id,
+                itemId: item.id,
+                fields: [
+                  ...(phaseSet ? [{ fieldId: phaseSet.fieldId, singleSelectOptionId: phaseSet.optionId }] : []),
+                  ...(prioSet ? [{ fieldId: prioSet.fieldId, singleSelectOptionId: prioSet.optionId }] : []),
+                ]
+              });
+            }
