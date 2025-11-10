@@ -1,0 +1,12 @@
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = ["data/", "models/", "reports/", "docs/"]
+
+[tool.ruff.lint]
+select = ["E","F","I","UP","B","S","W","C90"]
+ignore = ["E203"]
