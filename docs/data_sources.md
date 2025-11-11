@@ -138,28 +138,34 @@ NHANES is a nationally representative survey combining interviews, physical exam
 
 ### Description
 
-VDH publishes county-level and health district-level statistics on disease prevalence, health services utilization, vital statistics, and environmental health indicators. Datasets support public health planning and epidemiological research.
+VDH publishes county-level and health district-level statistics on health program utilization, social determinants of health, and environmental health indicators. This study utilizes two complementary datasets: **Virginia WIC Participation Data** (nutritional assistance program metrics) and **Health Opportunity Index** (composite measure of community health determinants). These datasets support stratified analysis by locality and health equity assessment.
 
 ### Volume & Sparsity
 
-- **Expected Volume**: ~500–1,000 aggregated records (county-months or district-years)
-- **Geographic Granularity**: County (n=133) and Health District (n=35) levels
-- **Generated Fields**: Case counts, rates, percentages, population denominators
+- **Expected Volume**: ~500–2,000 aggregated records (locality-level)
+- **Geographic Granularity**: County (n=133) and/or Health District (n=35) levels
+- **Datasets Used**:
+  - **Virginia WIC Participation Data**: Participation counts by locality for Women, Infants, and Children nutritional program
+  - **Health Opportunity Index (HOI)**: Composite scores incorporating education, economic, environmental, and social factors
+- **Generated Fields**: Participation rates, demographic breakdowns, composite health determinant scores, locality identifiers
 - **Sparsity Patterns**:
-  - Small counts (<10) often suppressed for privacy → ~10–20% censored cells
-  - Rural counties may have zero events for rare conditions → ~15% structural zeros
-  - Temporal gaps in older datasets (pre-2010 digitization incomplete)
-- **Temporal Coverage**: Varies by dataset; most 2015–present with monthly or annual updates
+  - Small counts (<10) may be suppressed for privacy → ~5–10% censored cells
+  - Rural localities may have zero participants for certain programs → ~10% structural zeros
+  - HOI components: <5% missing (high completeness for composite indices)
+- **Temporal Coverage**: Varies by dataset; WIC typically annual, HOI periodically updated
 
 ### Reliability
 
 - **Organizational Backing**: Virginia Department of Health (state public health authority)
-- **Validation**: Statutory reporting requirements ensure data quality; audited for federal grants
-- **Maintenance**: Active; datasets updated monthly/quarterly/annually depending on data type
+- **Validation**: 
+  - WIC data: Federal program reporting requirements ensure data quality
+  - HOI: Composite index methodology published and peer-reviewed (VCU Center on Society and Health)
+- **Maintenance**: Active; datasets updated annually or as new data becomes available
 - **Known Limitations**:
   - Aggregated data limits individual-level analysis
-  - Suppression rules reduce granularity in rural areas
-  - Definitions may change over time (e.g., COVID-19 case criteria updates)
+  - Suppression rules may reduce granularity in rural areas
+  - HOI composite scores may mask variance in underlying components
+  - WIC participation reflects program enrollment, not overall nutritional need
 
 ### Usability
 

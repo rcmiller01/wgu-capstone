@@ -22,3 +22,4 @@ reports/figures/*
 .DS_Store
 .vscode/
 .idea/
+resources/synthea-with-dependencies.jar
