@@ -159,7 +159,7 @@ def generate_synthea_data(
             "generation_date": datetime.now().isoformat()
         }
         
-        with open(output_dir / "metadata.json", 'w') as f:
+        with open(output_dir / "metadata.json", 'w', encoding='utf-8') as f:
             json.dump(metadata, f, indent=2)
         
         acq_logger.log("synthea", "SUCCESS", metadata)
@@ -319,7 +319,7 @@ df.to_csv('DEMO_J.csv', index=False)
 - Survey Design: https://wwwn.cdc.gov/nchs/nhanes/analyticguidelines.aspx
 """
     
-    with open(output_dir / "README.md", 'w') as f:
+    with open(output_dir / "README.md", 'w', encoding='utf-8') as f:
         f.write(readme_content)
     
     return True
@@ -394,7 +394,7 @@ data = response.json()
 ```
 """
     
-    with open(output_dir / "README.md", 'w') as f:
+    with open(output_dir / "README.md", 'w', encoding='utf-8') as f:
         f.write(readme_content)
     
     acq_logger.log("vdh", "MANUAL_REQUIRED", {
@@ -534,7 +534,7 @@ Classification and Localization of Common Thorax Diseases.
 CC0 (Public Domain)
 """
     
-    with open(output_dir / "README.md", 'w') as f:
+    with open(output_dir / "README.md", 'w', encoding='utf-8') as f:
         f.write(readme_content)
     
     acq_logger.log("nih_xray", "MANUAL_REQUIRED", {
