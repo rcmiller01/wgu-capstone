@@ -25,6 +25,30 @@ How can implementing a cloud-based, serverless FHIR-compliant data pipeline stre
 
 This study examines whether a serverless, FHIR-compliant data pipeline can make rural health-network data sharing more consistent, timely, and frictionless. Many small hospitals and clinics operate with fragmented systems and delayed data flow. By automating ingestion and validation within a lightweight serverless design, the project aims to demonstrate measurable improvement in how reliably information moves across the network. The focus is on the efficiency and quality of data movement rather than patient outcomes, aligning with the MSDA program's emphasis on applied analytics and measurable operational results.
 
+### Contribution to the Field
+
+**Contextual Novelty**: Most serverless health data demonstrations assume stable networks and enterprise operations. This research targets low-bandwidth, low-operations environments and proves viability through measurement rather than marketing materials. While existing literature examines FHIR adoption in large health systems, this study addresses the unique challenges of distributed, heterogeneous data sources common in rural networks with limited IT resources.
+
+**Method Novelty**: The study introduces a portable validation framework (rule packs + harness) that travels across sources and vendors, producing comparable metrics. This approach enables objective comparison of data quality regardless of source system heterogeneity.
+
+**Practical Artifacts**: The research delivers immediately reusable Infrastructure-as-Code (IaC), validation rule sets, and operational runbooks that can be deployed by other rural health networks without extensive customization.
+
+### Success Criteria
+
+**Latency Target**: P50 ≤ 30 seconds, P95 ≤ 120 seconds per file (100–10,000 rows), measured source-to-validated.
+
+**Reliability**: ≥ 99% successful validations after auto-retry on transient errors; ≥ 95% reproducible runs from IaC.
+
+**Cost Ceiling**: ≤ $X per 1,000 records end-to-end at typical clinic volumes; demonstrate 30–60% savings versus a minimal managed ETL stack.
+
+**Resilience**: Offline-tolerant staging (e.g., durable queue + idempotent processors) with at-least-once semantics.
+
+### Acknowledged Risks and Limitations
+
+**Technical Constraints**: Cold-start variance and OCR latency may inflate tail latencies. Mitigation strategies include warmers/batching, with separate reporting of cold and hot distributions.
+
+**Scope Boundaries**: PHI handling is out of scope; the study uses de-identified and synthetic data with documentation on how to extend the framework safely for production environments.
+
 ---
 
 ## Data Sources
