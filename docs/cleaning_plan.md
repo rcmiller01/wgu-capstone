@@ -1,661 +1,552 @@
 # Data Cleaning Plan
 
-**Document Status:** Final  
-**Version:** 2.0 (Relaxed Policy)  
-**Date:** 2025-11-11  
-**Project:** Serverless FHIR Data Pipeline Performance Study
-
----
-
 ## Overview
+This document specifies cleaning operations for all data sources to conform to the target schema defined in `resources/join_spec.json`. Each source requires dtype enforcement, column renaming, geographic/temporal derivations, PHI handling, and validation.
 
-This document specifies the data cleaning methodology applied to raw data files before aggregation into the cohort fact table. The cleaning plan implements the **v2 relaxed validation policy**, which balances data quality enforcement with real-world FHIR flexibility.
-
-**Guiding Principle:** Fail files only when metrics are uncomputable; warn and flag for all else.
+**Target Grain**: `state_month_va` (Virginia × YYYYMM period)  
+**Common Keys**: `state_abbr`, `period_id`, `source_id`, `schema_variant`
 
 ---
 
-## Cleaning Workflow
+## 1. Synthea (FHIR JSON)
 
-### Stage 1: Preprocessing (Before Validation)
-
-**Purpose:** Normalize common data quality issues to prevent false validation failures.
-
-#### 1.1 Sentinel Value Normalization
-
-**Applies to:** CSV, XPT files  
-**Rule:** `CORE-006`, `NHANES-004`
-
-**Sentinel Mappings:**
-
-| Source | Sentinel Value | Replacement | Rationale |
-|--------|----------------|-------------|-----------|
-| ALL | `"UNK"`, `"Unknown"` | `NULL` | Common missing value indicators |
-| ALL | `"NA"`, `"N/A"` | `NULL` | Standard missing value codes |
-| ALL | `"9999-99-99"` | `NULL` | Impossible date placeholder |
-| NHANES | `77777` | `NULL` | CDC "Refused" code |
-| NHANES | `99999` | `NULL` | CDC "Don't know" code |
-| NHANES | `"."` | `NULL` | SAS missing value indicator |
-| VDH | `"<10"`, `"suppressed"`, `"S"` | `NULL` | Privacy suppression |
-
-**Implementation:**
-
+### Dtype Locks
 ```python
-sentinel_values = ['UNK', 'Unknown', 'NA', 'N/A', '9999-99-99', 77777, 99999, '.', '<10', 'suppressed', 'S']
-df = df.replace(sentinel_values, pd.NA)
-```
-
----
-
-#### 1.2 Nullable Dtype Conversion
-
-**Applies to:** CSV, XPT files  
-**Rule:** `CORE-008`
-
-**Rationale:** Pandas `int64`, `float64`, `bool` do not support NA values. Use nullable types to prevent dtype coercion errors.
-
-**Dtype Mappings:**
-
-| Original Dtype | Nullable Dtype | Reason |
-|----------------|----------------|--------|
-| `int64` | `Int64` | Allows NA in integer columns |
-| `float64` | `Float64` | Consistent nullable handling |
-| `bool` | `boolean` | Allows NA in boolean columns |
-
-**Implementation:**
-
-```python
-df = df.astype({
-    'SEQN': 'Int64',           # NHANES primary key
-    'RIDAGEYR': 'Int64',       # Age in years
-    'validation_passed': 'boolean',  # Nullable boolean
-    'latency_sec': 'Float64'   # Allows NA for failed files
-})
-```
-
----
-
-#### 1.3 Column Name Standardization
-
-**Applies to:** NHANES XPT files  
-**Rule:** `NHANES-010`
-
-**Action:** Convert all column names to uppercase to match NHANES documentation.
-
-```python
-df.columns = df.columns.str.upper()
-```
-
----
-
-#### 1.4 CSV Encoding Detection
-
-**Applies to:** VDH CSV files  
-**Rule:** `VDH-010`
-
-**Action:** Attempt UTF-8 decoding; fallback to `latin-1` or `cp1252` if UTF-8 fails.
-
-```python
-try:
-    df = pd.read_csv(file_path, encoding='utf-8')
-except UnicodeDecodeError:
-    df = pd.read_csv(file_path, encoding='latin-1')
-```
-
----
-
-### Stage 2: Schema Validation
-
-**Purpose:** Ensure file structure matches expected format.
-
-#### 2.1 FHIR Bundle Structure
-
-**Applies to:** Synthea FHIR JSON files  
-**Rule:** `SYNTH-001`, `SYNTH-010`
-
-**Checks:**
-1. File is valid JSON
-2. `resourceType == "Bundle"`
-3. `entry` array exists
-
-**Action on Failure:** Fail file (cannot parse).
-
----
-
-#### 2.2 CSV/XPT File Structure
-
-**Applies to:** NHANES, VDH files  
-**Rule:** `VDH-001`, `NHANES-001`
-
-**Checks:**
-1. File is valid CSV/XPT format
-2. Column count consistent across all rows
-3. Header row present
-
-**Action on Failure:** Fail file (cannot parse).
-
----
-
-#### 2.3 Required Columns Present
-
-**Applies to:** All sources
-
-| Source | Required Columns | Rule |
-|--------|------------------|------|
-| **Synthea** | `resourceType`, `id` | `CORE-001`, `CORE-002` |
-| **NHANES** | `SEQN` (sequence number) | `NHANES-002` |
-| **VDH** | Locality identifier (FIPS or name) | `VDH-002` |
-
-**Action on Failure:** Fail file if required columns completely missing.
-
----
-
-### Stage 3: Field-Level Validation
-
-**Purpose:** Validate data types, ranges, and business logic.
-
-#### 3.1 Temporal Field Derivation
-
-**Applies to:** All sources (different logic per source)
-
-**FHIR (Synthea):**
-
-```python
-def derive_period_id(encounter):
-    """Derive YYYY-MM from Encounter temporal fields."""
-    if encounter.get('period', {}).get('start'):
-        return encounter['period']['start'][:7]  # 'YYYY-MM'
-    elif encounter.get('period', {}).get('end'):
-        flags['low_precision_time'] = 1
-        return encounter['period']['end'][:7]
-    elif encounter.get('actualPeriod', {}).get('start'):
-        flags['low_precision_time'] = 1
-        return encounter['actualPeriod']['start'][:7]
-    else:
-        raise ValidationError("No temporal field available (CORE-003)")
-```
-
-**NHANES:**
-
-```python
-# Survey cycle mapped to period_id
-cycle_mapping = {
-    '2017-2018': '2017-01',
-    '2019-2020': '2019-01'
-}
-period_id = cycle_mapping[file_cycle]
-flags['low_precision_time'] = 1  # Always flagged (aggregated data)
-```
-
-**VDH:**
-
-```python
-# Use file metadata or assume current year
-period_id = file_metadata.get('year', datetime.now().year)
-flags['low_precision_time'] = 1  # Always flagged (annual aggregates)
-```
-
-**Action on Failure:**
-- FHIR: Fail file if **all** temporal fields are NULL (CORE-003)
-- NHANES/VDH: Flag `low_precision_time=1`; proceed
-
----
-
-#### 3.2 Geographic Field Derivation
-
-**Applies to:** FHIR (Synthea) only
-
-```python
-def derive_state_abbr(patient):
-    """Derive state from Patient.address."""
-    if patient.get('address', [{}])[0].get('state') == 'VA':
-        return 'VA'
-    elif patient.get('address', [{}])[0].get('city') in VA_CITIES:
-        flags['ambiguous_geo'] = 1
-        return 'VA'  # Inferred from city
-    else:
-        flags['ambiguous_geo'] = 1
-        return None  # Unknown geography
-```
-
-**VA Cities List:** Richmond, Norfolk, Virginia Beach, Chesapeake, Arlington, etc. (loaded from reference file).
-
-**Action on Failure:** Flag `ambiguous_geo=1`; proceed (SYNTH-004).
-
----
-
-#### 3.3 Date Format Validation
-
-**Applies to:** All sources  
-**Rule:** `CORE-005`
-
-**Valid Formats:**
-- ISO 8601: `YYYY-MM-DD`, `YYYY-MM-DDTHH:MM:SS`, `YYYY-MM-DDTHH:MM:SS.sssZ`
-
-**Action on Failure:**
-- Drop row if date invalid and <5% rows affected
-- Fail file if >=5% rows have invalid dates
-
-```python
-def validate_date(date_str):
-    """Parse ISO 8601 date."""
-    try:
-        return pd.to_datetime(date_str, format='ISO8601')
-    except:
-        return pd.NaT  # Not a Time (pandas NA for datetime)
-
-df['encounter_date'] = df['encounter_date'].apply(validate_date)
-failure_rate = df['encounter_date'].isna().sum() / len(df)
-if failure_rate >= 0.05:
-    raise ValidationError(f"Date format failures: {failure_rate:.1%} (CORE-005)")
-```
-
----
-
-#### 3.4 Numeric Range Validation
-
-**Applies to:** All sources
-
-| Field | Valid Range | Rule | Action on Failure |
-|-------|-------------|------|-------------------|
-| `latency_sec` | >= 0 | `CORE-010` | Fail file (system error) |
-| `file_size_kb` | > 0 | `CORE-009` | Fail file (empty file) |
-| `HOI score` | 0-100 | `VDH-004` | Drop row if <5%; else fail |
-| `WIC count` | >= 0 | `VDH-005` | Drop row if <5%; else fail |
-| `Age (RIDAGEYR)` | 0-120 | `NHANES-007` | Warn; clip to range |
-
-**Implementation:**
-
-```python
-# Latency must be non-negative
-if (df['latency_sec'] < 0).any():
-    raise ValidationError("Negative latency detected (CORE-010)")
-
-# HOI score range check
-invalid_hoi = (df['HOI_score'] < 0) | (df['HOI_score'] > 100)
-if invalid_hoi.sum() / len(df) >= 0.05:
-    raise ValidationError(f"HOI out of range: {invalid_hoi.sum()} rows (VDH-004)")
-else:
-    df = df[~invalid_hoi]  # Drop invalid rows
-```
-
----
-
-### Stage 4: Business Logic Validation
-
-**Purpose:** Check cross-field consistency and domain-specific rules.
-
-#### 4.1 Observation Value Derivation
-
-**Applies to:** FHIR (Synthea)  
-**Rule:** `SYNTH-006`
-
-**Logic:**
-
-```python
-def get_observation_value(observation):
-    """Extract value from valueQuantity or component array."""
-    if observation.get('valueQuantity'):
-        return observation['valueQuantity']['value']
-    elif observation.get('component'):
-        # Multi-component observation (e.g., blood pressure)
-        return [c['valueQuantity']['value'] for c in observation['component']]
-    else:
-        # No value available
-        if observation.get('referenceRange'):
-            raise ValidationError("Observation missing value (SYNTH-006)")
-        else:
-            flags['lab_oob_na'] = 1  # No reference range → not a lab
-            return None
-```
-
-**Action on Failure:**
-- If `valueQuantity` and `component` both missing: Drop observation
-- If >5% observations fail: Fail file
-- Else: Flag `lab_oob_na=1`; proceed
-
----
-
-#### 4.2 Reference Integrity
-
-**Applies to:** FHIR (Synthea)  
-**Rule:** `SYNTH-008`, `SYNTH-009`
-
-**Cross-Bundle Reference Tolerance:**
-
-```python
-def validate_reference(reference, bundle):
-    """Check if reference points to resource in bundle."""
-    resource_id = reference.split('/')[-1]
-    resource_type = reference.split('/')[0]
-    
-    # Search for resource in same bundle
-    for entry in bundle.get('entry', []):
-        if entry['resource'].get('id') == resource_id:
-            return True  # Reference valid
-    
-    # Not in bundle → cross-bundle reference
-    flags['cross_bundle_ref'] = 1
-    return True  # Assume valid (v2 relaxed policy)
-
-# Encounter reference required for temporal join
-if not observation.get('encounter'):
-    raise ValidationError("Observation missing encounter reference (SYNTH-009)")
-```
-
-**Action on Failure:**
-- Missing encounter reference: Fail file if >5% observations affected
-- Cross-bundle reference: Warn; flag `cross_bundle_ref=1`; proceed
-
----
-
-### Stage 5: Row-Level Failure Tolerance
-
-**Purpose:** Allow <5% row-level failures without failing entire file.
-
-**Rule:** `CORE-007`
-
-**Implementation:**
-
-```python
-def apply_row_level_tolerance(df, validation_results):
-    """
-    Allow <5% row failures; fail file if >=5% affected.
-    
-    Metric-critical fields: latency_sec, validation_passed, file_size_kb
-    """
-    row_failures = validation_results['failed_rows']
-    failure_rate = len(row_failures) / len(df)
-    
-    if failure_rate >= 0.05:
-        raise ValidationError(
-            f"Row-level failures: {failure_rate:.1%} (>= 5% threshold, CORE-007)"
-        )
-    else:
-        # Drop failed rows; file passes
-        df = df.drop(index=row_failures)
-        logger.warning(f"Dropped {len(row_failures)} rows ({failure_rate:.1%})")
-    
-    return df
-```
-
-**Metric-Critical Fields:**
-- `latency_sec`: Required for P50/P95 metrics
-- `validation_passed`: Required for pass rate metric
-- `file_size_kb`: Required for file size analysis
-
----
-
-### Stage 6: Missingness Handling
-
-**Purpose:** Document and handle missing data according to source-specific policies.
-
-#### 6.1 Missing Data Strategy by Source
-
-| Source | Missing Data Tolerance | Handling |
-|--------|------------------------|----------|
-| **Synthea FHIR** | <5% row-level failures | Drop rows; file passes |
-| **NHANES** | 10-25% expected (exam refusals) | Drop missing; flag `exam_refused=1` |
-| **VDH** | 5-10% suppressed counts | Convert to NULL; flag `suppressed=1` |
-| **NIH** | Not implemented | N/A |
-
----
-
-#### 6.2 Multiple Imputation (NOT USED)
-
-**Rationale:** This study focuses on **pipeline performance metrics** (latency, validation), not clinical outcomes. Missing data in clinical fields (e.g., lab results, demographics) does not affect metric computability.
-
-**Decision:** Do not impute missing values; use listwise deletion (drop rows with missing metric-critical fields).
-
----
-
-### Stage 7: Outlier Detection
-
-**Purpose:** Identify and handle extreme values that may indicate data quality issues.
-
-#### 7.1 Latency Outliers
-
-**Rule:** Flag but do not remove latency outliers (legitimate variation).
-
-**Detection:**
-
-```python
-# Identify outliers using IQR method
-Q1 = df['latency_sec'].quantile(0.25)
-Q3 = df['latency_sec'].quantile(0.75)
-IQR = Q3 - Q1
-lower_bound = Q1 - 3 * IQR  # 3x IQR (very conservative)
-upper_bound = Q3 + 3 * IQR
-
-outliers = (df['latency_sec'] < lower_bound) | (df['latency_sec'] > upper_bound)
-df.loc[outliers, 'latency_outlier'] = 1
-```
-
-**Action:** Flag `latency_outlier=1`; keep in dataset (may reflect real complexity).
-
-**Sensitivity Analysis:** Compare P50/P95 with and without outliers in final report.
-
----
-
-#### 7.2 File Size Outliers
-
-**Detection:** Same IQR method as latency.
-
-**Action:** Flag `file_size_outlier=1`; keep in dataset.
-
-**Rationale:** Large files (e.g., 50MB Synthea bundles with extensive histories) are legitimate, not errors.
-
----
-
-### Stage 8: Data Quality Flags
-
-**Purpose:** Carry forward flags for downstream filtering and sensitivity analysis.
-
-#### 8.1 Flag Definitions
-
-| Flag | Triggered By | Impact | Values |
-|------|--------------|--------|--------|
-| `low_precision_time` | CORE-004, NHANES-005, VDH-006 | Excluded from month-stratified analysis | 0 (precise), 1 (low precision) |
-| `ambiguous_geo` | SYNTH-004 | Excluded from VA geographic aggregates | 0 (explicit), 1 (inferred/unknown) |
-| `lab_oob_na` | SYNTH-005 | Excluded from lab_oob_rate metric | 0 (has range), 1 (no range) |
-| `nih_geo_limited` | NIH-007 | Excluded from VA joins | 0 (geography available), 1 (no state) |
-| `latency_outlier` | Stage 7 | Sensitivity analysis only | 0 (normal), 1 (outlier) |
-| `file_size_outlier` | Stage 7 | Sensitivity analysis only | 0 (normal), 1 (outlier) |
-| `cross_bundle_ref` | SYNTH-008 | Informational; no exclusion | 0 (same bundle), 1 (cross-bundle) |
-
----
-
-#### 8.2 Flag Application
-
-**Implementation:**
-
-```python
-# Initialize flags (all default to 0)
-flags = {
-    'low_precision_time': 0,
-    'ambiguous_geo': 0,
-    'lab_oob_na': 0,
-    'nih_geo_limited': 0,
-    'latency_outlier': 0,
-    'file_size_outlier': 0,
-    'cross_bundle_ref': 0
-}
-
-# Set flags during validation
-if only_one_temporal_field:
-    flags['low_precision_time'] = 1
-
-if state_inferred_from_city:
-    flags['ambiguous_geo'] = 1
-
-# Append flags to DataFrame
-for flag_name, flag_value in flags.items():
-    df[flag_name] = flag_value
-```
-
----
-
-### Stage 9: Final Validation Pass
-
-**Purpose:** Calculate `validation_passed` boolean based on all validation checks.
-
-**Logic:**
-
-```python
-def calculate_validation_passed(file_path, validation_results):
-    """
-    File passes validation if:
-    1. Core schema intact (resourceType, id present)
-    2. At least one temporal field for period_id derivation
-    3. <5% metric-critical rows unusable
-    4. All error-level rules passed
-    
-    Warnings do not count as failures.
-    """
-    errors = [r for r in validation_results if r['severity'] == 'error']
-    warnings = [r for r in validation_results if r['severity'] == 'warn']
-    
-    validation_passed = (
-        len(errors) == 0 and
-        validation_results['row_failure_rate'] < 0.05
-    )
-    
-    return validation_passed
-```
-
----
-
-### Stage 10: Aggregation to Cohort Fact Table
-
-**Purpose:** Aggregate cleaned row-level data into cohort summary metrics.
-
-**Aggregation Logic:**
-
-```python
-cohort_fact = processed_data.groupby('data_source').agg({
-    'file_name': 'count',                          # n_records
-    'latency_sec': ['mean', lambda x: x.quantile(0.5), lambda x: x.quantile(0.95)],
-    'validation_passed': lambda x: x.sum() / len(x),  # pass_rate
-    'file_size_kb': 'mean'
-}).reset_index()
-
-cohort_fact.columns = [
-    'data_source', 'n_records', 
-    'mean_latency_sec', 'p50_latency_sec', 'p95_latency_sec',
-    'validation_pass_rate', 'mean_file_size_kb'
-]
-
-# Append ALL aggregate row
-all_aggregate = processed_data.agg({...})  # Same aggregates across all sources
-cohort_fact = pd.concat([cohort_fact, all_aggregate], ignore_index=True)
-```
-
-**Output:** `data/processed/cohort_fact_va.csv`
-
----
-
-## Validation Policy Versions
-
-### V1 Strict (94.9% pass rate)
-
-- Requires **both** `period.start` AND `period.end`
-- Requires explicit `Patient.address.state`
-- Requires `Observation.referenceRange` for all observations
-- Rejects cross-bundle references
-- Rejects files with any optional element variability
-
-**Result:** 52 failures (all Synthea), 94.9% pass rate (below 95% target).
-
----
-
-### V2 Relaxed (95.9% pass rate - CURRENT)
-
-- Requires **at least one** temporal field (start OR end OR actualPeriod)
-- Allows state inference from city; flags `ambiguous_geo=1`
-- Allows missing reference range; flags `lab_oob_na=1`
-- Allows cross-bundle references if resourceType + ID match
-- Tolerates <5% row-level failures
-
-**Result:** 41 failures (all Synthea), 95.9% pass rate (achieves >=95% target).
-
-**Changes from V1 → V2:** 11 fewer failures (−21% reduction).
-
----
-
-## Data Lineage Tracking
-
-**Purpose:** Ensure traceability from raw → processed → cohort.
-
-### Provenance Metadata
-
-**Captured for each file:**
-
-```json
+# Patient Resource
 {
-  "file_path": "data/raw/synthea/fhir/Patient_12345.json",
-  "sha256": "abc123...",
-  "processing_date": "2025-11-11T14:30:00Z",
-  "validation_version": "v2_relaxed",
-  "validation_passed": true,
-  "flags": {
-    "low_precision_time": 0,
-    "ambiguous_geo": 0,
-    "lab_oob_na": 1
-  },
-  "row_count_original": 150,
-  "row_count_cleaned": 148,
-  "rows_dropped": 2,
-  "drop_reasons": ["invalid_date", "missing_value"]
+    "id": "string",
+    "name.family": "string",
+    "name.given[0]": "string",
+    "gender": "category",  # enum: male|female|other|unknown
+    "birthDate": "datetime64[ns]",
+    "address.state": "category",
+    "address.city": "string",
+    "address.postalCode": "string",
+    "maritalStatus.text": "category"
+}
+
+# Encounter Resource
+{
+    "id": "string",
+    "status": "category",  # enum: finished|in-progress|cancelled
+    "class.code": "category",  # enum: AMB|EMER|IMP|ACUTE|VR
+    "period.start": "datetime64[ns]",
+    "period.end": "datetime64[ns]",
+    "subject.reference": "string"
+}
+
+# Observation Resource
+{
+    "id": "string",
+    "status": "category",  # enum: final|preliminary|amended
+    "code.coding[0].code": "string",  # LOINC
+    "valueQuantity.value": "float64",
+    "valueQuantity.unit": "string",
+    "effectiveDateTime": "datetime64[ns]"
+}
+
+# Condition Resource
+{
+    "id": "string",
+    "code.coding[0].code": "string",  # SNOMED CT
+    "code.coding[0].display": "string",
+    "onsetDateTime": "datetime64[ns]",
+    "clinicalStatus.coding[0].code": "category"
 }
 ```
 
-**Stored in:** `data/processed/metadata.json`
+### Column Renames
+```
+Patient.id → patient_id
+Patient.address[0].state → raw_state
+Encounter.period.start → encounter_date
+Observation.effectiveDateTime → observation_date
+Condition.onsetDateTime → condition_onset_date
+```
+
+### Derivations
+**state_abbr**:
+```python
+# Extract from Patient.address[0].state
+# Force uppercase, validate against US state codes
+# Filter: state_abbr == 'VA' OR remap all to 'VA' if needed
+df['state_abbr'] = df['raw_state'].str.upper()
+df = df[df['state_abbr'] == 'VA']
+```
+
+**period_id**:
+```python
+# From Encounter.period.start, Observation.effectiveDateTime, etc.
+df['period_id'] = df['encounter_date'].dt.strftime('%Y%m')
+# Set low_precision_time = False (full datetime available)
+```
+
+**customer_id** (HMAC hash):
+```python
+import hmac, hashlib, os
+salt = os.getenv('CAPSTONE_HMAC_SALT')
+df['customer_id'] = df['patient_id'].apply(
+    lambda pid: hmac.new(salt.encode(), pid.encode(), hashlib.sha256).hexdigest()
+)
+```
+
+### Drop Rules
+**PHI-Sensitive** (even though synthetic):
+- `name.family`, `name.given`
+- `address.line` (keep state/city only)
+- `telecom` (phone, email)
+- Raw `patient_id` (replace with `customer_id`)
+
+**Redundant**:
+- `resourceType` (tracked in schema_variant)
+- `fullUrl` (internal FHIR reference)
+
+### Range Checks
+```python
+# Age validation (derived from birthDate)
+age = (datetime.now() - df['birthDate']).dt.days / 365.25
+assert age.between(0, 120).all(), "Invalid ages detected"
+
+# Gender enum
+assert df['gender'].isin(['male', 'female', 'other', 'unknown']).all()
+
+# Observation values (example: BMI)
+bmi_obs = df[df['loinc_code'] == '39156-5']
+assert bmi_obs['value'].between(10, 80).all(), "BMI out of range"
+
+# Blood pressure (example: systolic)
+sbp_obs = df[df['loinc_code'] == '8480-6']
+assert sbp_obs['value'].between(60, 250).all(), "SBP out of range"
+```
+
+### Enum Sets
+```python
+encounter_status = ['finished', 'in-progress', 'cancelled', 'entered-in-error']
+encounter_class = ['AMB', 'EMER', 'IMP', 'ACUTE', 'NONAC', 'VR']
+observation_status = ['final', 'preliminary', 'amended', 'cancelled', 'corrected']
+condition_status = ['active', 'recurrence', 'relapse', 'inactive', 'remission', 'resolved']
+```
+
+### Null-Handling Policy
+- **Required (fail if null)**: `patient_id`, `birthDate`, `gender`, `address.state`
+- **Optional (allow null)**: `maritalStatus`, `address.postalCode`, `telecom`
+- **Temporal nulls**: Set `low_precision_time = True` if only year available (rare in Synthea)
+- **Value nulls**: For Observations, allow null `valueQuantity` if `valueCodeableConcept` present
 
 ---
 
-### Audit Trail
+## 2. VDH (CSV)
 
-**Git Commits:** All cleaning scripts and rule packs versioned in Git.
+### Dtype Locks
+```python
+# Health Opportunity Index
+{
+    "locality": "string",
+    "fips_code": "string",  # keep as string (leading zeros)
+    "health_opportunity_index": "float64",
+    "education_score": "float64",
+    "social_economic_score": "float64",
+    "physical_environment_score": "float64",
+    "community_safety_score": "float64",
+    "population": "int64",
+    "median_household_income": "int64",
+    "poverty_rate": "float64",
+    "year": "int64"
+}
 
-**Reproducibility:** Re-run `src/pipeline/process_raw_data.py` with same random seed (12345) produces identical results.
+# Virginia WIC
+{
+    "locality": "string",
+    "fips_code": "string",
+    "report_year": "int64",
+    "report_month": "int64",  # nullable
+    "total_participants": "int64",
+    "women_participants": "int64",
+    "infants_participants": "int64",
+    "children_participants": "int64"
+}
+```
 
-**Validation Reports:** Generated for both v1 and v2 (`validation_report_v1_strict.md`, `validation_report_v2_relaxed.md`).
+### Column Renames
+```
+locality → locality_name
+fips_code → locality_fips
+health_opportunity_index → hoi_score
+report_year → year
+report_month → month
+```
+
+### Derivations
+**state_abbr**:
+```python
+# All VDH data is Virginia localities
+df['state_abbr'] = 'VA'
+```
+
+**period_id**:
+```python
+# For HOI: year only → YYYY01 + low_precision_time flag
+df['period_id'] = df['year'].astype(str) + '01'
+df['low_precision_time'] = True
+
+# For WIC: year + month if available
+df['period_id'] = df['year'].astype(str) + df['month'].astype(str).str.zfill(2)
+df['low_precision_time'] = df['month'].isna()
+df.loc[df['month'].isna(), 'period_id'] = df['year'].astype(str) + '01'
+```
+
+### Drop Rules
+**Redundant**:
+- Internal row IDs if present
+- Duplicate locality identifiers (keep `fips_code` as primary)
+
+**PHI**: None (aggregated geographic data)
+
+### Range Checks
+```python
+# HOI scores (0-100 scale)
+assert df['hoi_score'].between(0, 100).all()
+assert df['education_score'].between(0, 100).all()
+
+# Population (VA locality range)
+assert df['population'].between(1000, 2_000_000).all()
+
+# Poverty rate (0-100%)
+assert df['poverty_rate'].between(0, 100).all()
+
+# WIC participants (non-negative)
+assert (df['total_participants'] >= 0).all()
+assert (df['women_participants'] >= 0).all()
+
+# Month validation
+assert df['month'].isna() | df['month'].between(1, 12)
+
+# Year validation
+assert df['year'].between(2015, 2025).all()
+```
+
+### Enum Sets
+```python
+# FIPS codes must start with '51' (Virginia)
+assert df['fips_code'].str.startswith('51').all()
+
+# 133 Virginia localities (95 counties + 38 cities)
+valid_localities = 133  # validate against reference list
+```
+
+### Null-Handling Policy
+- **Required (fail if null)**: `locality_name`, `fips_code`, `year`
+- **Optional (allow null)**: `month` (annual data), individual metric columns (suppressed for small counts)
+- **Temporal nulls**: Set `low_precision_time = True` when `month` is null
+- **Suppressed counts**: WIC participants may be null/0 for small localities (privacy protection)
 
 ---
 
-## Quality Assurance Checks
+## 3. NHANES (XPT)
 
-### Post-Cleaning Validation
+### Dtype Locks
+```python
+# DEMO files
+{
+    "SEQN": "int64",  # keep but drop before output
+    "SDDSRVYR": "int64",  # cycle: 10=2017-18, 11=2019-20
+    "RIDSTATR": "category",  # 1=interview, 2=interview+exam
+    "RIAGENDR": "category",  # 1=male, 2=female
+    "RIDAGEYR": "int64",
+    "RIDRETH3": "category",  # race/ethnicity
+    "DMDEDUC2": "category",  # education
+    "INDFMPIR": "float64",  # income-to-poverty ratio
+    "WTINT2YR": "float64",  # interview weight
+    "WTMEC2YR": "float64",  # exam weight
+    "SDMVPSU": "int64",  # PSU for variance
+    "SDMVSTRA": "int64"  # stratum for variance
+}
 
-1. **Schema Consistency:** All output files match `docs/data_dictionary_cohort_va.md` schema
-2. **Range Checks:** P50 <= P95, pass_rate in [0.0, 1.0], n_records > 0
-3. **Completeness:** No NULL in primary keys (`data_source`)
-4. **Aggregation Accuracy:** Manual spot-check of 10 files confirms metrics match hand calculations
+# BMX files
+{
+    "SEQN": "int64",
+    "BMXWT": "float64",  # weight (kg)
+    "BMXHT": "float64",  # height (cm)
+    "BMXBMI": "float64",  # BMI
+    "BMXWAIST": "float64"  # waist circumference
+}
 
-### Unit Tests
+# TCHOL files
+{
+    "SEQN": "int64",
+    "LBXTC": "float64",  # total cholesterol (mg/dL)
+    "LBDTCSI": "float64"  # total cholesterol (mmol/L)
+}
 
-**File:** `tests/test_schema.py`
+# BPQ files
+{
+    "SEQN": "int64",
+    "BPQ020": "category",  # told high BP (1=yes, 2=no, 7=refused, 9=don't know)
+    "BPQ080": "category",  # told high cholesterol
+    "BPQ090D": "category"  # prescribed cholesterol meds
+}
+```
 
-**Tests:**
-- `test_cohort_fact_schema()` - Validates column names and dtypes
-- `test_validation_pass_rate_range()` - Ensures pass_rate in [0, 1]
-- `test_latency_non_negative()` - Ensures latency_sec >= 0
-- `test_p50_le_p95()` - Ensures P50 <= P95
+### Column Renames
+```
+SEQN → respondent_id (drop later)
+SDDSRVYR → cycle_code
+RIDAGEYR → age_years
+RIAGENDR → gender_code
+BMXWT → weight_kg
+BMXHT → height_cm
+BMXBMI → bmi
+LBXTC → total_cholesterol_mg_dl
+BPQ020 → has_high_bp
+WTMEC2YR → survey_weight
+```
 
-**Run:** `pytest tests/test_schema.py`
+### Derivations
+**state_abbr**:
+```python
+# NHANES has NO state-level geography
+# Use survey weights to project national estimates to VA
+df['state_abbr'] = 'VA'  # proxy designation
+df['is_weighted_proxy'] = True
+```
+
+**period_id**:
+```python
+# Derive from cycle code (no exact dates)
+cycle_map = {10: '201701', 11: '201901'}  # map to first month of cycle
+df['period_id'] = df['cycle_code'].map(cycle_map)
+df['low_precision_time'] = True  # only year-level precision
+```
+
+### Drop Rules
+**PHI-Sensitive**:
+- `SEQN` (respondent ID - drop after merging datasets)
+
+**Refused/Don't Know codes** (recode or filter):
+- Values 7, 77, 777 (Refused)
+- Values 9, 99, 999 (Don't Know)
+- Option 1: Convert to NaN
+- Option 2: Create separate flag column
+
+**Redundant**:
+- `LBDTCSI` (keep mg/dL version only)
+- Comment codes (BMIWT, BMIHT, etc. - keep data columns only)
+
+### Range Checks
+```python
+# Age (0-80, top-coded at 80)
+assert df['age_years'].between(0, 80).all()
+
+# BMI (physiologically plausible)
+assert df['bmi'].between(10, 80).all() | df['bmi'].isna()
+
+# Weight (kg)
+assert df['weight_kg'].between(20, 250).all() | df['weight_kg'].isna()
+
+# Height (cm)
+assert df['height_cm'].between(50, 230).all() | df['height_cm'].isna()
+
+# Total cholesterol (mg/dL)
+assert df['total_cholesterol_mg_dl'].between(50, 600).all() | df['total_cholesterol_mg_dl'].isna()
+
+# Survey weights (must be positive)
+assert (df['survey_weight'] > 0).all() | df['survey_weight'].isna()
+```
+
+### Enum Sets
+```python
+# Cycle codes
+valid_cycles = [10, 11]  # 2017-2018, 2019-2020
+
+# Gender codes
+valid_gender = [1, 2]  # 1=male, 2=female
+
+# Interview/exam status
+valid_status = [1, 2]  # 1=interview only, 2=both
+
+# Race/ethnicity (RIDRETH3)
+valid_race = [1, 2, 3, 4, 6, 7]
+
+# Yes/No/Refused/Don't Know
+valid_ynrdk = [1, 2, 7, 9]
+```
+
+### Null-Handling Policy
+- **Required (fail if null)**: `SEQN`, `cycle_code`, `age_years`, `gender_code`, `survey_weight`
+- **Optional (allow null)**: BMI, cholesterol, blood pressure (exam data ~10-20% missing)
+- **Skip patterns**: Many questionnaire items have high missingness (50-70%) due to age/eligibility filters
+- **Refused/Don't Know**: Convert codes 7/77/777 and 9/99/999 to NaN, track in separate flag column
+- **Temporal nulls**: Always set `low_precision_time = True` (no exact dates available)
 
 ---
 
-## Cross-References
+## 4. NIH (Image Metadata)
 
-**Validation Policy:** `docs/methods_validation_policy.md` - Error vs warn justifications  
-**Data Dictionary:** `docs/data_dictionary_cohort_va.md` - Schema definitions  
-**Metrics Spec:** `docs/metrics_spec.md` - Denominator/unit clarifications  
-**Join Spec:** `resources/join_spec.json` - Join keys and aggregation logic  
-**Rule Packs:** `resources/rules/*.json` - Machine-readable validation rules  
-**Processing Script:** `src/pipeline/process_raw_data.py` - Implementation  
-**Aggregation Script:** `src/pipeline/generate_cohort_summary.py` - Cohort table creation
+### Dtype Locks
+```python
+{
+    "image_id": "string",
+    "patient_id": "string",  # if available
+    "acquisition_date": "datetime64[ns]",  # if available
+    "finding_labels": "string",  # pipe-separated list
+    "patient_age": "int64",
+    "patient_gender": "category",
+    "view_position": "category",  # PA|AP|LATERAL
+    "image_width": "int64",
+    "image_height": "int64",
+    "state": "category"  # RARELY available
+}
+```
+
+### Column Renames
+```
+Patient ID → patient_id
+Finding Labels → finding_labels
+Patient Age → patient_age
+Patient Gender → patient_gender
+View Position → view_position
+```
+
+### Derivations
+**state_abbr**:
+```python
+# NIH chest X-ray data LACKS geography
+# Most records will not have state information
+df['state_abbr'] = df['state'].fillna('UNKNOWN')
+df['ambiguous_geo'] = df['state'].isna()
+df['nih_geo_limited'] = True  # flag for all NIH rows
+```
+
+**period_id**:
+```python
+# From acquisition_date if available
+df['period_id'] = df['acquisition_date'].dt.strftime('%Y%m')
+df.loc[df['acquisition_date'].isna(), 'period_id'] = 'UNKNOWN'
+df['low_precision_time'] = df['acquisition_date'].isna()
+```
+
+### Drop Rules
+**PHI-Sensitive**:
+- `patient_id` (if real patient data; likely de-identified already)
+
+**Redundant**:
+- Raw image paths (keep metadata only)
+- Duplicate metadata fields
+
+### Range Checks
+```python
+# Age (newborn to elderly)
+assert df['patient_age'].between(0, 110).all() | df['patient_age'].isna()
+
+# Image dimensions (reasonable X-ray sizes)
+assert df['image_width'].between(500, 5000).all()
+assert df['image_height'].between(500, 5000).all()
+```
+
+### Enum Sets
+```python
+# Gender
+valid_gender = ['M', 'F', 'O', 'U']  # male, female, other, unknown
+
+# View position
+valid_views = ['PA', 'AP', 'LATERAL', 'LL', 'RL']
+
+# Finding labels (common findings)
+common_findings = [
+    'No Finding', 'Atelectasis', 'Cardiomegaly', 'Effusion', 
+    'Infiltration', 'Mass', 'Nodule', 'Pneumonia', 'Pneumothorax'
+]
+```
+
+### Null-Handling Policy
+- **Required (fail if null)**: `image_id`, `finding_labels`
+- **Optional (allow null)**: `acquisition_date`, `patient_age`, `state` (EXPECTED to be null)
+- **Temporal nulls**: Set `low_precision_time = True` when `acquisition_date` is null
+- **Geographic nulls**: Set `ambiguous_geo = True` and `nih_geo_limited = True` when `state` is null
+- **Expected missingness**: 80-100% of records will lack `state` and many will lack `acquisition_date`
 
 ---
 
-**Document Status:** FINAL - Cleaning plan frozen and implemented in v2 pipeline
+## Cross-Source Validation
+
+### Unified Schema Checks
+After cleaning, all sources must conform to:
+```python
+required_columns = [
+    'state_abbr',           # category
+    'period_id',            # string (YYYYMM)
+    'source_id',            # category (CSV|FHIR|IMG_META)
+    'schema_variant',       # category
+    'low_precision_time',   # boolean
+    'ambiguous_geo',        # boolean
+    'nih_geo_limited'       # boolean (NIH only)
+]
+```
+
+### Data Quality Flags Summary
+```python
+# Flag assignment rules:
+# - low_precision_time: True if only year available (NHANES always, VDH sometimes, NIH often)
+# - ambiguous_geo: True if state could not be confidently resolved (NIH mostly)
+# - nih_geo_limited: True for all NIH records (geography not in dataset)
+```
+
+### Merge Key Validation
+```python
+# Before aggregation to state_month grain:
+# 1. Verify state_abbr is valid US state code or 'VA'
+# 2. Verify period_id matches regex: ^\d{6}$ (YYYYMM)
+# 3. Verify source_id in allowed set
+# 4. Remove duplicates on natural key combinations
+```
+
+---
+
+## Implementation Checklist
+
+### Phase 1: Extract
+- [ ] Load Synthea FHIR JSON bundles (5,000 files)
+- [ ] Load VDH CSVs (2 files)
+- [ ] Load NHANES XPT files (8 files)
+- [ ] Load NIH metadata (if available)
+
+### Phase 2: Clean (per source)
+- [ ] Apply dtype locks
+- [ ] Rename columns to conformed names
+- [ ] Derive state_abbr and period_id
+- [ ] Drop PHI/redundant columns
+- [ ] Enforce range checks and enums
+- [ ] Handle nulls per policy
+
+### Phase 3: Validate
+- [ ] Run rules from `resources/rules/core.json`
+- [ ] Run source-specific rules (synthea.json, vdh.json, nhanes.json, nih.json)
+- [ ] Generate validation report
+- [ ] Flag records failing critical checks
+
+### Phase 4: Transform
+- [ ] Set validation flags (low_precision_time, ambiguous_geo, nih_geo_limited)
+- [ ] Apply HMAC hash for Synthea customer_id
+- [ ] Filter to state_abbr='VA' where appropriate
+- [ ] Merge datasets on SEQN (NHANES) or patient_id (Synthea)
+
+### Phase 5: Load
+- [ ] Aggregate to state_month_va grain
+- [ ] Compute cohort fact columns
+- [ ] Build dimension tables (GeoDim, DateDim, SourceDim)
+- [ ] Write to processed data directory
+
+---
+
+## Notes
+
+- **Survey Weights**: NHANES requires survey weights (WTINT2YR, WTMEC2YR) for valid population estimates. Consult CDC guidelines before aggregation.
+- **FHIR Parsing**: Synthea FHIR bundles require recursive JSON navigation; use `entry[].resource` array.
+- **SAS Transport**: NHANES XPT files require `pyreadstat` library for reading.
+- **Privacy**: Even though Synthea is synthetic, maintain PHI handling practices for consistency.
+- **Performance**: Synthea processing (5,000 files × ~3.8MB) may require parallel processing or chunking.
+
+---
+
+**Last Updated**: 2025-11-11  
+**See Also**: `resources/join_spec.json`, `resources/rules/*.json`

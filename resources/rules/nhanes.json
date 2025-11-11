@@ -1,159 +1,394 @@
 {
-  "rule_pack_name": "nhanes_xpt_rules",
-  "version": "2.0_relaxed",
-  "description": "Validation rules specific to NHANES SAS XPT files",
-  "extends": "core_validation_rules",
-  "created_date": "2025-11-11",
-  
+  "rule_set": "nhanes",
+  "version": "1.0.0",
+  "description": "Validation rules specific to NHANES (National Health and Nutrition Examination Survey) XPT data files",
+  "applies_to": ["nhanes"],
+  "source_id": "CSV",
   "rules": [
     {
-      "rule_id": "NHANES-001",
-      "name": "xpt_file_structure_valid",
-      "description": "File must be valid SAS XPT transport format",
+      "rule_id": "nha_001",
+      "field": "SEQN",
+      "check": "schema_presence",
+      "params": {
+        "required": true,
+        "before_drop": true
+      },
       "severity": "error",
-      "condition": "XPT header missing or corrupted",
-      "rationale": "Cannot parse non-XPT files",
-      "action_on_failure": "Fail file",
-      "applies_to": ["nhanes/**/*.XPT"]
+      "on_fail_hint": "SEQN (respondent sequence number) is required for merging NHANES datasets; verify XPT read"
     },
     {
-      "rule_id": "NHANES-002",
-      "name": "seqn_primary_key_present",
-      "description": "SEQN (sequence number) must be present for record linkage",
+      "rule_id": "nha_002",
+      "field": "SEQN",
+      "check": "dtype_enforcement",
+      "params": {
+        "dtype": "int64",
+        "nullable": false
+      },
       "severity": "error",
-      "condition": "SEQN column is NULL for all rows",
-      "rationale": "SEQN is primary key for NHANES cross-table joins",
-      "action_on_failure": "Fail file",
-      "applies_to": ["nhanes/**/*.XPT"]
+      "on_fail_hint": "Convert SEQN to int64 dtype"
     },
     {
-      "rule_id": "NHANES-003",
-      "name": "survey_weights_optional",
-      "description": "Survey weights (WTMEC2YR, WTINT2YR) may be missing",
-      "severity": "warn",
-      "condition": "Weight variable is NULL",
-      "rationale": "Weights needed for national estimates, not for pipeline performance metrics",
-      "action_on_failure": "Warn; proceed without weights",
-      "applies_to": ["nhanes/**/*.XPT"]
-    },
-    {
-      "rule_id": "NHANES-004",
-      "name": "sentinel_value_normalization",
-      "description": "CDC sentinel values must be converted to NULL",
-      "severity": "warn",
-      "condition": "Value in (77777, 99999, '.', 'Refused', 'Don't know')",
-      "rationale": "NHANES uses numeric codes for missing/refused responses",
-      "action_on_failure": "Convert to NULL; proceed",
-      "applies_to": ["nhanes/**/*.XPT"],
-      "preprocessing": true,
-      "sentinel_mappings": {
-        "77777": "Refused",
-        "99999": "Don't know",
-        ".": "Missing"
-      }
-    },
-    {
-      "rule_id": "NHANES-005",
-      "name": "temporal_precision_aggregated",
-      "description": "NHANES survey months aggregated to 2-year cycles",
-      "severity": "warn",
-      "condition": "No individual-level month available",
-      "rationale": "NHANES provides cycle-level temporal data, not exact dates",
-      "action_on_failure": "Set low_precision_time=1; use cycle start date for period_id",
-      "applies_to": ["nhanes/**/*.XPT"],
-      "cycle_mapping": {
-        "2017-2018": "period_id = '2017-01'",
-        "2019-2020": "period_id = '2019-01'"
-      }
-    },
-    {
-      "rule_id": "NHANES-006",
-      "name": "lab_result_loinc_codes",
-      "description": "Lab results should have LOINC codes for standardization",
-      "severity": "warn",
-      "condition": "Lab result variable has no LOINC mapping",
-      "rationale": "LOINC codes enable cross-dataset harmonization",
-      "action_on_failure": "Warn; use NHANES variable name as fallback",
-      "applies_to": ["nhanes/**/TCHOL_*.XPT", "nhanes/**/LAB*.XPT"]
-    },
-    {
-      "rule_id": "NHANES-007",
-      "name": "demographic_data_complete",
-      "description": "Core demographics (RIDAGEYR, RIAGENDR) must be present",
+      "rule_id": "nha_003",
+      "field": "SEQN",
+      "check": "uniqueness",
+      "params": {
+        "scope": "per_file",
+        "note": "SEQN should be unique within each NHANES file"
+      },
       "severity": "error",
-      "condition": "Age or gender missing for >5% of rows",
-      "rationale": "Demographic variables needed for stratified analysis",
-      "action_on_failure": "Fail file if >5% missing",
-      "applies_to": ["nhanes/**/DEMO_*.XPT"]
+      "on_fail_hint": "Duplicate SEQN within file; NHANES data integrity issue"
     },
     {
-      "rule_id": "NHANES-008",
-      "name": "examination_data_sparsity_tolerance",
-      "description": "Examination data may have 10-25% missingness",
-      "severity": "warn",
-      "condition": "Examination variable missing for 10-25% of participants",
-      "rationale": "Participant refusal or contraindications are expected",
-      "action_on_failure": "Warn; drop rows with missing exam data",
-      "applies_to": ["nhanes/**/BMX_*.XPT", "nhanes/**/BPQ_*.XPT"]
+      "rule_id": "nha_004",
+      "field": "SEQN",
+      "check": "range_check",
+      "params": {
+        "min": 1,
+        "max": 999999,
+        "cycle_j": [93703, 102956],
+        "cycle_k": [102957, 120000]
+      },
+      "severity": "warning",
+      "on_fail_hint": "SEQN outside typical range for cycle; verify data source integrity"
     },
     {
-      "rule_id": "NHANES-009",
-      "name": "cycle_version_consistency",
-      "description": "File must belong to consistent survey cycle",
+      "rule_id": "nha_005",
+      "field": "SDDSRVYR",
+      "check": "schema_presence",
+      "params": {
+        "required": true
+      },
       "severity": "error",
-      "condition": "File in 2017-2018 folder but SDDSRVYR != 10",
-      "rationale": "Mismatched cycle indicators suggest data corruption",
-      "action_on_failure": "Fail file",
-      "applies_to": ["nhanes/**/*.XPT"],
-      "cycle_codes": {
-        "10": "2017-2018",
-        "11": "2019-March 2020"
-      }
+      "on_fail_hint": "SDDSRVYR (cycle code) is required for temporal derivation; check XPT file schema"
     },
     {
-      "rule_id": "NHANES-010",
-      "name": "column_name_uppercase",
-      "description": "NHANES variables are uppercase by convention",
-      "severity": "warn",
-      "condition": "Column names contain lowercase characters",
-      "rationale": "Ensures consistency with NHANES documentation",
-      "action_on_failure": "Convert to uppercase; proceed",
-      "applies_to": ["nhanes/**/*.XPT"],
-      "preprocessing": true
+      "rule_id": "nha_006",
+      "field": "SDDSRVYR",
+      "check": "enum_check",
+      "params": {
+        "allowed_values": [10, 11],
+        "note": "10=2017-2018, 11=2019-2020"
+      },
+      "severity": "error",
+      "on_fail_hint": "SDDSRVYR must be 10 (2017-2018) or 11 (2019-2020); unexpected cycle code"
+    },
+    {
+      "rule_id": "nha_007",
+      "field": "RIDSTATR",
+      "check": "enum_check",
+      "params": {
+        "allowed_values": [1, 2],
+        "note": "1=interviewed only, 2=interviewed and examined"
+      },
+      "severity": "warning",
+      "on_fail_hint": "RIDSTATR should be 1 or 2; check interview/exam status code"
+    },
+    {
+      "rule_id": "nha_008",
+      "field": "RIAGENDR",
+      "check": "enum_check",
+      "params": {
+        "allowed_values": [1, 2],
+        "note": "1=male, 2=female"
+      },
+      "severity": "error",
+      "on_fail_hint": "RIAGENDR must be 1 (male) or 2 (female); check gender coding"
+    },
+    {
+      "rule_id": "nha_009",
+      "field": "RIDAGEYR",
+      "check": "range_check",
+      "params": {
+        "min": 0,
+        "max": 80,
+        "note": "Top-coded at 80 for privacy"
+      },
+      "severity": "error",
+      "on_fail_hint": "RIDAGEYR (age in years) must be 0-80; ages 80+ are top-coded"
+    },
+    {
+      "rule_id": "nha_010",
+      "field": "RIDRETH3",
+      "check": "enum_check",
+      "params": {
+        "allowed_values": [1, 2, 3, 4, 6, 7],
+        "description": "Race/ethnicity categories"
+      },
+      "severity": "warning",
+      "on_fail_hint": "RIDRETH3 should be in valid race/ethnicity code set; check NHANES codebook"
+    },
+    {
+      "rule_id": "nha_011",
+      "field": "WTINT2YR",
+      "check": "schema_presence",
+      "params": {
+        "required": true,
+        "file_types": ["DEMO"]
+      },
+      "severity": "error",
+      "on_fail_hint": "WTINT2YR (interview weight) required for survey analysis; verify DEMO file schema"
+    },
+    {
+      "rule_id": "nha_012",
+      "field": "WTINT2YR",
+      "check": "range_check",
+      "params": {
+        "min": 0,
+        "max": 1000000,
+        "allow_zero": true
+      },
+      "severity": "warning",
+      "on_fail_hint": "WTINT2YR (survey weight) should be positive; zero weights indicate non-response"
+    },
+    {
+      "rule_id": "nha_013",
+      "field": "WTMEC2YR",
+      "check": "schema_presence",
+      "params": {
+        "required": true,
+        "file_types": ["DEMO"]
+      },
+      "severity": "error",
+      "on_fail_hint": "WTMEC2YR (exam weight) required for MEC data analysis; verify DEMO file schema"
+    },
+    {
+      "rule_id": "nha_014",
+      "field": "WTMEC2YR",
+      "check": "range_check",
+      "params": {
+        "min": 0,
+        "max": 1000000,
+        "allow_zero": true
+      },
+      "severity": "warning",
+      "on_fail_hint": "WTMEC2YR should be positive; zero indicates no exam participation"
+    },
+    {
+      "rule_id": "nha_015",
+      "field": "BMXWT",
+      "check": "range_check",
+      "params": {
+        "min": 20,
+        "max": 250,
+        "unit": "kg",
+        "file_types": ["BMX"]
+      },
+      "severity": "warning",
+      "on_fail_hint": "BMXWT (weight in kg) outside physiological range 20-250; verify measurement or data quality"
+    },
+    {
+      "rule_id": "nha_016",
+      "field": "BMXHT",
+      "check": "range_check",
+      "params": {
+        "min": 50,
+        "max": 230,
+        "unit": "cm",
+        "file_types": ["BMX"]
+      },
+      "severity": "warning",
+      "on_fail_hint": "BMXHT (height in cm) outside physiological range 50-230; verify measurement"
+    },
+    {
+      "rule_id": "nha_017",
+      "field": "BMXBMI",
+      "check": "range_check",
+      "params": {
+        "min": 10,
+        "max": 80,
+        "unit": "kg/m2",
+        "file_types": ["BMX"]
+      },
+      "severity": "warning",
+      "on_fail_hint": "BMXBMI outside range 10-80; verify BMI calculation or data quality"
+    },
+    {
+      "rule_id": "nha_018",
+      "field": "BMXBMI",
+      "check": "consistency_check",
+      "params": {
+        "rule": "BMXBMI approximately equals BMXWT / (BMXHT/100)^2",
+        "tolerance": 0.5,
+        "file_types": ["BMX"]
+      },
+      "severity": "warning",
+      "on_fail_hint": "BMI does not match weight/height calculation; verify data integrity"
+    },
+    {
+      "rule_id": "nha_019",
+      "field": "LBXTC",
+      "check": "range_check",
+      "params": {
+        "min": 50,
+        "max": 600,
+        "unit": "mg/dL",
+        "file_types": ["TCHOL"]
+      },
+      "severity": "warning",
+      "on_fail_hint": "LBXTC (total cholesterol) outside physiological range 50-600 mg/dL; verify lab result"
+    },
+    {
+      "rule_id": "nha_020",
+      "field": "BPQ020",
+      "check": "enum_check",
+      "params": {
+        "allowed_values": [1, 2, 7, 9],
+        "note": "1=Yes, 2=No, 7=Refused, 9=Don't know",
+        "file_types": ["BPQ"]
+      },
+      "severity": "warning",
+      "on_fail_hint": "BPQ020 (told high BP) should be 1/2/7/9; check questionnaire coding"
+    },
+    {
+      "rule_id": "nha_021",
+      "field": "*",
+      "check": "refused_dont_know_handling",
+      "params": {
+        "refused_codes": [7, 77, 777],
+        "dont_know_codes": [9, 99, 999],
+        "action": "convert_to_nan_or_flag"
+      },
+      "severity": "info",
+      "on_fail_hint": "Refused (7/77/777) and Don't Know (9/99/999) codes should be handled; convert to NaN or flag"
+    },
+    {
+      "rule_id": "nha_022",
+      "field": "state_abbr",
+      "check": "value_check",
+      "params": {
+        "expected_value": "VA",
+        "after_transform": true
+      },
+      "severity": "info",
+      "on_fail_hint": "NHANES has no state-level geography; state_abbr='VA' is a weighted proxy designation"
+    },
+    {
+      "rule_id": "nha_023",
+      "field": "period_id",
+      "check": "consistency_check",
+      "params": {
+        "rule": "if SDDSRVYR == 10 then period_id == '201701'; if SDDSRVYR == 11 then period_id == '201901'"
+      },
+      "severity": "error",
+      "on_fail_hint": "period_id should map from cycle code: 10→201701, 11→201901; verify derivation"
+    },
+    {
+      "rule_id": "nha_024",
+      "field": "low_precision_time",
+      "check": "value_check",
+      "params": {
+        "expected_value": true,
+        "reason": "NHANES only has cycle-level (year) temporal precision"
+      },
+      "severity": "error",
+      "on_fail_hint": "NHANES should always have low_precision_time=True (no exact dates); flag must be set"
+    },
+    {
+      "rule_id": "nha_025",
+      "field": "ambiguous_geo",
+      "check": "value_check",
+      "params": {
+        "expected_value": false,
+        "reason": "While NHANES lacks state geography, VA is explicitly assigned as weighted proxy"
+      },
+      "severity": "info",
+      "on_fail_hint": "NHANES ambiguous_geo should be False (VA explicitly assigned as proxy); set True only if derivation fails"
+    },
+    {
+      "rule_id": "nha_026",
+      "field": "nih_geo_limited",
+      "check": "value_check",
+      "params": {
+        "expected_value": false,
+        "reason": "NHANES is not NIH data"
+      },
+      "severity": "error",
+      "on_fail_hint": "nih_geo_limited should be False for NHANES; this flag is NIH-specific"
+    },
+    {
+      "rule_id": "nha_027",
+      "field": "*",
+      "check": "drop_after_merge",
+      "params": {
+        "fields_to_drop": ["SEQN"],
+        "after_transform": true,
+        "reason": "SEQN is respondent ID (PHI-sensitive); drop after merging datasets"
+      },
+      "severity": "error",
+      "on_fail_hint": "SEQN must be dropped after dataset merge; verify cleaning pipeline"
     }
   ],
-  
-  "flag_definitions": {
-    "low_precision_time": {
-      "triggered_by": ["NHANES-005"],
-      "description": "Survey months aggregated to 2-year cycles",
-      "impact": "Excluded from month-stratified analyses; contribute to overall counts"
+  "file_specific_rules": {
+    "DEMO": {
+      "required_fields": ["SEQN", "SDDSRVYR", "RIDSTATR", "RIAGENDR", "RIDAGEYR", "WTINT2YR", "WTMEC2YR", "SDMVPSU", "SDMVSTRA"],
+      "variance_fields": ["SDMVPSU", "SDMVSTRA"],
+      "weight_fields": ["WTINT2YR", "WTMEC2YR"],
+      "note": "DEMO is the master file; all others merge via SEQN"
+    },
+    "BMX": {
+      "required_fields": ["SEQN", "BMXWT", "BMXHT", "BMXBMI"],
+      "measurement_fields": ["BMXWT", "BMXHT", "BMXBMI", "BMXWAIST", "BMXLEG", "BMXARML", "BMXARMC"],
+      "typical_missingness": "5-15%"
+    },
+    "TCHOL": {
+      "required_fields": ["SEQN", "LBXTC"],
+      "lab_fields": ["LBXTC"],
+      "typical_missingness": "10-20%",
+      "note": "Drop LBDTCSI (SI units); keep mg/dL only"
+    },
+    "BPQ": {
+      "required_fields": ["SEQN"],
+      "questionnaire_fields": ["BPQ020", "BPQ030", "BPQ040A", "BPQ050A", "BPQ080", "BPQ090D"],
+      "typical_missingness": "50-70% due to skip patterns",
+      "note": "High missingness expected for age/condition-specific questions"
     }
   },
-  
-  "nhanes_specific_assumptions": {
-    "cycles_used": ["2017-2018", "2019-2020"],
-    "components_used": [
-      "Demographics (DEMO_J, DEMO_K)",
-      "Body Measures (BMX_J, BMX_K)",
-      "Blood Pressure (BPQ_J, BPQ_K)",
-      "Total Cholesterol (TCHOL_J, TCHOL_K)"
-    ],
-    "sample_size_per_cycle": "~4,000-5,000 participants per cycle",
-    "file_sizes": "Typically <200KB per XPT file",
-    "survey_design": "Complex stratified multistage probability sampling",
-    "virginia_weighting": "State-level weights available via RECODE variables"
+  "cycle_mappings": {
+    "cycle_j": {
+      "code": 10,
+      "period": "2017-2018",
+      "period_id": "201701",
+      "seqn_range": [93703, 102956]
+    },
+    "cycle_k": {
+      "code": 11,
+      "period": "2019-2020",
+      "period_id": "201901",
+      "seqn_range": [102957, 120000],
+      "note": "COVID-19 interruption; data collection stopped March 2020"
+    }
   },
-  
-  "validation_pass_criteria": {
-    "v1_strict": "All required variables present; no sentinel values allowed",
-    "v2_relaxed": "Core schema intact + SEQN present + <5% demographic missingness"
-  },
-  
-  "cross_references": {
-    "nhanes_documentation": "https://wwwn.cdc.gov/nchs/nhanes/",
-    "xpt_parser": "pandas.read_sas() or SAS xport library",
-    "validation_policy": "docs/methods_validation_policy.md",
-    "data_dictionary": "data/raw/nhanes/DATA_DICTIONARY.md"
-  }
+  "label_harmonization": [
+    {
+      "original_field": "RIAGENDR",
+      "original_values": {"1": "male", "2": "female"},
+      "harmonized_field": "gender",
+      "harmonized_values": {"1": "M", "2": "F"}
+    },
+    {
+      "original_field": "BPQ020",
+      "original_values": {"1": "Yes", "2": "No", "7": "Refused", "9": "Don't know"},
+      "harmonized_field": "has_high_bp",
+      "harmonized_values": {"1": true, "2": false, "7": null, "9": null}
+    }
+  ],
+  "survey_weight_guidance": [
+    {
+      "note": "Use WTINT2YR for interview-only data (DEMO, BPQ questionnaires)",
+      "severity": "critical"
+    },
+    {
+      "note": "Use WTMEC2YR for examination data (BMX, TCHOL laboratory results)",
+      "severity": "critical"
+    },
+    {
+      "note": "Consult CDC NHANES analytic guidelines for proper variance estimation using SDMVPSU and SDMVSTRA",
+      "severity": "critical",
+      "url": "https://wwwn.cdc.gov/nchs/nhanes/analyticguidelines.aspx"
+    },
+    {
+      "note": "To project national estimates to Virginia: apply survey weights and adjust for VA population demographics",
+      "severity": "info"
+    }
+  ]
 }

@@ -1,147 +1,331 @@
 {
-  "rule_pack_name": "vdh_csv_rules",
-  "version": "2.0_relaxed",
-  "description": "Validation rules specific to Virginia Department of Health CSV files",
-  "extends": "core_validation_rules",
-  "created_date": "2025-11-11",
-  
+  "rule_set": "vdh",
+  "version": "1.0.0",
+  "description": "Validation rules specific to Virginia Department of Health CSV data sources",
+  "applies_to": ["vdh"],
+  "source_id": "CSV",
   "rules": [
     {
-      "rule_id": "VDH-001",
-      "name": "csv_structure_valid",
-      "description": "File must be valid CSV with consistent column count",
+      "rule_id": "vdh_001",
+      "field": "locality",
+      "check": "schema_presence",
+      "params": {
+        "required": true
+      },
       "severity": "error",
-      "condition": "CSV parsing fails or column count varies across rows",
-      "rationale": "Cannot parse malformed CSV",
-      "action_on_failure": "Fail file",
-      "applies_to": ["vdh/*.csv"]
+      "on_fail_hint": "locality field is required; verify CSV column name matches expected schema"
     },
     {
-      "rule_id": "VDH-002",
-      "name": "locality_identifier_present",
-      "description": "Each row must have locality identifier (FIPS code or locality name)",
+      "rule_id": "vdh_002",
+      "field": "locality",
+      "check": "dtype_enforcement",
+      "params": {
+        "dtype": "string",
+        "nullable": false
+      },
       "severity": "error",
-      "condition": "Locality column is NULL or empty",
-      "rationale": "Locality is primary key for VDH aggregated data",
-      "action_on_failure": "Fail file if >5% rows missing locality",
-      "applies_to": ["vdh/*.csv"]
+      "on_fail_hint": "Convert locality to string dtype"
     },
     {
-      "rule_id": "VDH-003",
-      "name": "small_count_suppression_tolerance",
-      "description": "Counts <10 may be suppressed for privacy",
-      "severity": "warn",
-      "condition": "Count field contains '<10', 'suppressed', or NULL",
-      "rationale": "VDH suppresses small counts to prevent re-identification",
-      "action_on_failure": "Set to NULL; warn; proceed",
-      "applies_to": ["vdh/*.csv"],
-      "suppression_indicators": ["<10", "suppressed", "S"]
-    },
-    {
-      "rule_id": "VDH-004",
-      "name": "health_opportunity_index_range",
-      "description": "HOI scores must be in valid range (0-100)",
+      "rule_id": "vdh_003",
+      "field": "fips_code",
+      "check": "schema_presence",
+      "params": {
+        "required": true
+      },
       "severity": "error",
-      "condition": "HOI score < 0 OR HOI score > 100",
-      "rationale": "Out-of-range scores indicate data corruption",
-      "action_on_failure": "Drop row if <5% affected; fail file if >=5%",
-      "applies_to": ["vdh/Health Opportunity Index.csv"]
+      "on_fail_hint": "fips_code is required for geographic linkage; verify CSV schema"
     },
     {
-      "rule_id": "VDH-005",
-      "name": "wic_participation_counts_non_negative",
-      "description": "WIC participation counts must be >= 0",
+      "rule_id": "vdh_004",
+      "field": "fips_code",
+      "check": "dtype_enforcement",
+      "params": {
+        "dtype": "string",
+        "nullable": false,
+        "note": "Keep as string to preserve leading zeros"
+      },
       "severity": "error",
-      "condition": "Participation count < 0",
-      "rationale": "Negative counts indicate data entry error",
-      "action_on_failure": "Drop row if <5% affected; fail file if >=5%",
-      "applies_to": ["vdh/Virginia WIC.csv"]
+      "on_fail_hint": "Convert fips_code to string (not int) to preserve leading zeros"
     },
     {
-      "rule_id": "VDH-006",
-      "name": "temporal_field_aggregated",
-      "description": "VDH data typically annual; derive period_id from file metadata",
-      "severity": "warn",
-      "condition": "No explicit date column present",
-      "rationale": "Annual aggregate data lacks individual-level temporal precision",
-      "action_on_failure": "Set low_precision_time=1; use file metadata or assume current year",
-      "applies_to": ["vdh/*.csv"]
+      "rule_id": "vdh_005",
+      "field": "fips_code",
+      "check": "regex_pattern",
+      "params": {
+        "pattern": "^51\\d{3}$",
+        "description": "Virginia FIPS codes start with 51"
+      },
+      "severity": "error",
+      "on_fail_hint": "FIPS code must be 5-digit string starting with 51 (Virginia); check data source"
     },
     {
-      "rule_id": "VDH-007",
-      "name": "fips_code_format_validation",
-      "description": "FIPS codes must be 5-digit strings (2-digit state + 3-digit county)",
-      "severity": "warn",
-      "condition": "FIPS code does not match pattern ^51\\d{3}$ (Virginia counties)",
-      "rationale": "Malformed FIPS codes prevent geographic joins",
-      "action_on_failure": "Attempt to zero-pad; warn",
-      "applies_to": ["vdh/*.csv"],
-      "virginia_fips_prefix": "51"
+      "rule_id": "vdh_006",
+      "field": "fips_code",
+      "check": "enum_count",
+      "params": {
+        "expected_unique": 133,
+        "description": "Virginia has 133 localities (95 counties + 38 cities)"
+      },
+      "severity": "warning",
+      "on_fail_hint": "Expected 133 unique Virginia localities; verify data completeness or aggregation level"
     },
     {
-      "rule_id": "VDH-008",
-      "name": "locality_name_standardization",
-      "description": "Locality names should match Virginia county/city naming conventions",
-      "severity": "warn",
-      "condition": "Locality name not in standard Virginia locality list",
-      "rationale": "Non-standard names complicate joins",
-      "action_on_failure": "Attempt fuzzy match; warn",
-      "applies_to": ["vdh/*.csv"],
-      "virginia_localities": 133
+      "rule_id": "vdh_007",
+      "field": "year",
+      "check": "schema_presence",
+      "params": {
+        "required": true
+      },
+      "severity": "error",
+      "on_fail_hint": "year field is required for temporal derivation; check CSV column names"
     },
     {
-      "rule_id": "VDH-009",
-      "name": "composite_index_components_optional",
-      "description": "HOI composite score may be present without all component scores",
-      "severity": "warn",
-      "condition": "HOI composite present but education/economic/environmental/social components NULL",
-      "rationale": "VDH may provide composite without publishing all components",
-      "action_on_failure": "Warn; use composite only",
-      "applies_to": ["vdh/Health Opportunity Index.csv"]
+      "rule_id": "vdh_008",
+      "field": "year",
+      "check": "dtype_enforcement",
+      "params": {
+        "dtype": "int64",
+        "nullable": false
+      },
+      "severity": "error",
+      "on_fail_hint": "Convert year to int64 dtype"
     },
     {
-      "rule_id": "VDH-010",
-      "name": "csv_encoding_utf8",
-      "description": "CSV must be UTF-8 encoded",
-      "severity": "warn",
-      "condition": "Non-UTF-8 characters detected",
-      "rationale": "Ensures proper handling of special characters (e.g., accented names)",
-      "action_on_failure": "Attempt to decode with fallback encodings; warn",
-      "applies_to": ["vdh/*.csv"],
-      "fallback_encodings": ["latin-1", "cp1252"]
+      "rule_id": "vdh_009",
+      "field": "year",
+      "check": "range_check",
+      "params": {
+        "min": 2015,
+        "max": 2025
+      },
+      "severity": "warning",
+      "on_fail_hint": "year outside expected range 2015-2025; verify data source time bounds"
+    },
+    {
+      "rule_id": "vdh_010",
+      "field": "month",
+      "check": "dtype_enforcement",
+      "params": {
+        "dtype": "int64",
+        "nullable": true,
+        "note": "Month may be null for annual data"
+      },
+      "severity": "warning",
+      "on_fail_hint": "Convert month to nullable int64; annual data will have null month"
+    },
+    {
+      "rule_id": "vdh_011",
+      "field": "month",
+      "check": "range_check",
+      "params": {
+        "min": 1,
+        "max": 12,
+        "allow_null": true
+      },
+      "severity": "error",
+      "on_fail_hint": "month must be 1-12 or null; invalid month values detected"
+    },
+    {
+      "rule_id": "vdh_012",
+      "field": "state_abbr",
+      "check": "value_check",
+      "params": {
+        "expected_value": "VA",
+        "after_transform": true
+      },
+      "severity": "error",
+      "on_fail_hint": "All VDH records should have state_abbr='VA'; derivation logic failed"
+    },
+    {
+      "rule_id": "vdh_013",
+      "field": "period_id",
+      "check": "consistency_check",
+      "params": {
+        "rule": "if month is null then period_id ends with '01' and low_precision_time is True"
+      },
+      "severity": "error",
+      "on_fail_hint": "When month is null, period_id should be YYYY01 with low_precision_time=True"
+    },
+    {
+      "rule_id": "vdh_014",
+      "field": "period_id",
+      "check": "consistency_check",
+      "params": {
+        "rule": "if month is not null then period_id == str(year) + str(month).zfill(2)"
+      },
+      "severity": "error",
+      "on_fail_hint": "period_id should be YYYYMM when month is available; check derivation logic"
+    },
+    {
+      "rule_id": "vdh_015",
+      "field": "health_opportunity_index",
+      "check": "range_check",
+      "params": {
+        "min": 0,
+        "max": 100,
+        "schema_variant": "vdh_hoi"
+      },
+      "severity": "error",
+      "on_fail_hint": "Health Opportunity Index score must be 0-100; check data source or scaling"
+    },
+    {
+      "rule_id": "vdh_016",
+      "field": "education_score",
+      "check": "range_check",
+      "params": {
+        "min": 0,
+        "max": 100,
+        "schema_variant": "vdh_hoi"
+      },
+      "severity": "error",
+      "on_fail_hint": "Education score must be 0-100; verify HOI component scaling"
+    },
+    {
+      "rule_id": "vdh_017",
+      "field": "social_economic_score",
+      "check": "range_check",
+      "params": {
+        "min": 0,
+        "max": 100,
+        "schema_variant": "vdh_hoi"
+      },
+      "severity": "error",
+      "on_fail_hint": "Social/economic score must be 0-100; verify HOI component scaling"
+    },
+    {
+      "rule_id": "vdh_018",
+      "field": "population",
+      "check": "range_check",
+      "params": {
+        "min": 1000,
+        "max": 2000000,
+        "schema_variant": "vdh_hoi"
+      },
+      "severity": "warning",
+      "on_fail_hint": "Population outside typical VA locality range 1,000-2,000,000; verify data"
+    },
+    {
+      "rule_id": "vdh_019",
+      "field": "poverty_rate",
+      "check": "range_check",
+      "params": {
+        "min": 0,
+        "max": 100,
+        "schema_variant": "vdh_hoi"
+      },
+      "severity": "error",
+      "on_fail_hint": "Poverty rate must be 0-100%; check if value is decimal (0-1) and needs scaling"
+    },
+    {
+      "rule_id": "vdh_020",
+      "field": "total_participants",
+      "check": "range_check",
+      "params": {
+        "min": 0,
+        "max": 50000,
+        "schema_variant": "vdh_wic"
+      },
+      "severity": "warning",
+      "on_fail_hint": "WIC total participants outside expected range 0-50,000; verify locality size or data quality"
+    },
+    {
+      "rule_id": "vdh_021",
+      "field": "total_participants",
+      "check": "consistency_check",
+      "params": {
+        "rule": "total_participants >= (women_participants + infants_participants + children_participants)",
+        "schema_variant": "vdh_wic",
+        "allow_null": true
+      },
+      "severity": "warning",
+      "on_fail_hint": "WIC total participants should equal or exceed sum of category counts; check for data quality issues"
+    },
+    {
+      "rule_id": "vdh_022",
+      "field": "women_participants",
+      "check": "range_check",
+      "params": {
+        "min": 0,
+        "max": 10000,
+        "schema_variant": "vdh_wic"
+      },
+      "severity": "warning",
+      "on_fail_hint": "WIC women participants outside expected range; verify data quality"
+    },
+    {
+      "rule_id": "vdh_023",
+      "field": "*",
+      "check": "suppression_check",
+      "params": {
+        "rule": "small_count_suppression",
+        "threshold": 5,
+        "note": "VDH may suppress counts < 5 for privacy"
+      },
+      "severity": "info",
+      "on_fail_hint": "Small counts may be suppressed or null for privacy protection; this is expected"
+    },
+    {
+      "rule_id": "vdh_024",
+      "field": "ambiguous_geo",
+      "check": "value_check",
+      "params": {
+        "expected_value": false,
+        "reason": "VDH data has explicit Virginia locality identifiers"
+      },
+      "severity": "warning",
+      "on_fail_hint": "VDH data should have ambiguous_geo=False (explicit geography); unexpected if True"
+    },
+    {
+      "rule_id": "vdh_025",
+      "field": "nih_geo_limited",
+      "check": "value_check",
+      "params": {
+        "expected_value": false,
+        "reason": "VDH is not NIH data"
+      },
+      "severity": "error",
+      "on_fail_hint": "nih_geo_limited should be False for VDH; this flag is NIH-specific"
     }
   ],
-  
-  "flag_definitions": {
-    "low_precision_time": {
-      "triggered_by": ["VDH-006"],
-      "description": "Annual aggregate data; no monthly granularity",
-      "impact": "Excluded from month-stratified analyses; contribute to overall counts"
+  "schema_variant_rules": {
+    "vdh_hoi": {
+      "required_fields": [
+        "locality", "fips_code", "year", "health_opportunity_index",
+        "education_score", "social_economic_score", "population"
+      ],
+      "score_fields": [
+        "health_opportunity_index", "education_score", "social_economic_score",
+        "physical_environment_score", "community_safety_score"
+      ],
+      "score_range": [0, 100]
+    },
+    "vdh_wic": {
+      "required_fields": [
+        "locality", "fips_code", "year", "total_participants"
+      ],
+      "participant_fields": [
+        "women_participants", "infants_participants", "children_participants"
+      ],
+      "temporal_granularity": "monthly_or_annual"
     }
   },
-  
-  "vdh_specific_assumptions": {
-    "files_used": [
-      "Health Opportunity Index.csv",
-      "Virginia WIC.csv"
-    ],
-    "granularity": "County/locality-level aggregates (not individual-level)",
-    "geographic_coverage": "133 Virginia counties and independent cities",
-    "temporal_coverage": "Typically annual snapshots; WIC may be quarterly",
-    "file_sizes": "Typically <1MB per CSV",
-    "data_updates": "Irregular; datasets refreshed annually or as available"
-  },
-  
-  "validation_pass_criteria": {
-    "v1_strict": "All required columns present; no suppressed counts allowed",
-    "v2_relaxed": "Core schema intact + locality identifier + <5% suppressed cells"
-  },
-  
-  "cross_references": {
-    "vdh_data_portal": "https://data.virginia.gov/browse?tags=health",
-    "virginia_localities": "https://www.vdh.virginia.gov/local-health-districts/",
-    "hoi_methodology": "VCU Center on Society and Health",
-    "validation_policy": "docs/methods_validation_policy.md",
-    "data_dictionary": "data/raw/vdh/DATA_DICTIONARY.md"
-  }
+  "data_quality_notes": [
+    {
+      "note": "VDH data may have suppressed counts for small localities to protect privacy",
+      "severity": "info"
+    },
+    {
+      "note": "Month field may be null for annual aggregations; set low_precision_time flag",
+      "severity": "info"
+    },
+    {
+      "note": "FIPS codes must be preserved as strings to maintain leading zeros (e.g., 51001)",
+      "severity": "warning"
+    },
+    {
+      "note": "All VDH data is inherently Virginia-specific; state_abbr should always be 'VA'",
+      "severity": "info"
+    }
+  ]
 }
