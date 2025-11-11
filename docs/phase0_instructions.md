@@ -28,20 +28,22 @@ Polish the capstone proposal to meet WGU rubric requirements by ensuring:
 
 ## Tasks Checklist
 
-### 1. Statistical Terminology Consistency ✓ (Mostly Complete)
+### 1. Statistical Terminology Consistency ✅ (COMPLETE)
 
-**Current Status**: Strong foundation in place
+**Status**: All requirements met
 
-**Verify:**
+**Completed:**
 - [x] Research question mentions "streamline," "reduce friction," "raise consistency"
 - [x] Hypotheses use proper notation (H₀, H₁)
 - [x] Statistical test clearly identified (paired t-test, p < .05)
 - [x] Variables table defines IV/DV roles (see `docs/variables_table.md`)
-- [ ] **TODO**: Add explicit mention of primary DV (`latency_sec`) and secondary DV (`validation_pass_bool`) in hypothesis section
+- [x] **DVs explicitly named in hypotheses**: `latency_sec` (primary), `validation_pass_bool` (secondary)
 
-**Action Items:**
-- Review hypothesis section to ensure DVs are explicitly named
-- Confirm all statistical terms align with `docs/variables_table.md`
+**Updated Hypothesis Section:**
+- H₀: "...no significant change in data consistency (`validation_pass_bool`) or timeliness (`latency_sec`)..."
+- H₁: "...significant improvement in consistency (`validation_pass_bool`) and timeliness (`latency_sec`)..."
+
+**All statistical terms align with** `docs/variables_table.md` and `docs/variables_table_summary.md`
 
 ---
 
@@ -111,20 +113,25 @@ Polish the capstone proposal to meet WGU rubric requirements by ensuring:
 
 ---
 
-### 5. Variable Table Enhancement
+### 5. Variable Table Enhancement ✅ (COMPLETE)
 
-**Current**: Basic Field/Type table in HTML template
+**Status**: Comprehensive and submission-ready tables created
 
-**Required per Issue #1**: Add IV/DV role column
+**Deliverables:**
+1. **`docs/variables_table.md`** - Complete technical specification
+   - All variables with detailed roles, types, scales, and notes
+   - Hypothesis alignment (H₁, H₂, H₃)
+   - Practical guardrails and PHI exclusions
+   - Designed vs. observational IV categories
 
-**Solution**: Reference comprehensive table in `docs/variables_table.md`
+2. **`docs/variables_table_summary.md`** - Concise submission-ready table
+   - Primary variables in clean table format
+   - Control variables section
+   - Excluded variables with justifications
+   - Role definitions (DV, IV, Control, Stratifier)
+   - Direct mapping to research hypotheses
 
-**Action Items:**
-- Consider creating a simplified summary table for proposal submission showing:
-  - Variable Name
-  - Role (Primary DV, Secondary DV, IV, Control, Stratifier)
-  - Type (categorical/numeric)
-  - Scale (nominal/ordinal/continuous/count)
+**Both tables ready for proposal submission and rubric requirements**
 
 ---
 
@@ -181,18 +188,44 @@ Polish the capstone proposal to meet WGU rubric requirements by ensuring:
 
 ---
 
-## Completion Criteria
+## Completion Criteria ✅ ALL COMPLETE
 
-- [ ] All first-person pronouns removed
-- [ ] DVs explicitly named in hypothesis section
-- [ ] Contribution to field stated in Context
-- [ ] All factual claims have in-text citations
-- [ ] Variable table includes IV/DV roles
-- [ ] Statistical terminology consistent throughout
-- [ ] Cross-referenced with variables_table.md
-- [ ] Ready for mentor review
+- [x] All first-person pronouns removed (verified - none found)
+- [x] DVs explicitly named in hypothesis section (`latency_sec`, `validation_pass_bool`)
+- [x] Contribution to field stated in Context (contextual + method novelty + artifacts)
+- [x] Success criteria quantified (latency, reliability, cost, resilience)
+- [x] Risks and limitations acknowledged (cold-start, PHI scope)
+- [x] All factual claims have in-text citations (current sources sufficient)
+- [x] Variable table includes IV/DV roles (two versions: detailed + summary)
+- [x] Statistical terminology consistent throughout
+- [x] Cross-referenced with variables_table.md and variables_table_summary.md
+- [x] Ready for mentor review
 
 ---
 
-**Status**: Ready to begin Phase 0 polish  
-**Est. Completion**: Align with project timeline (4/24/2025 final deadline)
+## Final Deliverables
+
+### Documentation Files (All in `docs/`)
+1. ✅ `proposal_reference.md` - Complete enhanced proposal
+2. ✅ `variables_table.md` - Comprehensive variable specifications
+3. ✅ `variables_table_summary.md` - Submission-ready table
+4. ✅ `phase0_instructions.md` - This file (task tracking)
+
+### Key Enhancements Made
+- **Hypotheses**: DVs explicitly named with variable names in backticks
+- **Context**: Three-part novelty statement (contextual + method + artifacts)
+- **Success Criteria**: Four quantified targets (latency, reliability, cost, resilience)
+- **Risks**: Two explicitly acknowledged with mitigation strategies
+- **Variables**: Complete role definitions with exclusion justifications
+
+### Cross-Reference Verification
+- ✅ Variable names match across all documents
+- ✅ Hypotheses align with variables table
+- ✅ Success criteria match latency_sec specifications
+- ✅ Statistical methods match DV types (continuous → t-test)
+- ✅ All citations present in sources list
+
+---
+
+**Status**: Phase 0 - COMPLETE ✅  
+**Next Phase**: Phase 1 - Data source & variables table documentation

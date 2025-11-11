@@ -15,9 +15,9 @@ How can implementing a cloud-based, serverless FHIR-compliant data pipeline stre
 
 ## Hypotheses
 
-**H₀** (Null): Implementation of the serverless FHIR pipeline will produce no statistically significant change in data consistency or timeliness compared with the current manual process.
+**H₀** (Null): Implementation of the serverless FHIR pipeline will produce no statistically significant change in data consistency (`validation_pass_bool`) or timeliness (`latency_sec`) compared with the current manual process.
 
-**H₁** (Alternative): Implementation of the serverless FHIR pipeline will produce a statistically significant improvement in data consistency and timeliness as measured by a paired t-test (p < .05).
+**H₁** (Alternative): Implementation of the serverless FHIR pipeline will produce a statistically significant improvement in data consistency (`validation_pass_bool`) and timeliness (`latency_sec`) as measured by a paired t-test (p < .05).
 
 ---
 
