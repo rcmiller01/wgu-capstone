@@ -1,0 +1,170 @@
+{
+  "rule_pack_name": "synthea_fhir_rules",
+  "version": "2.0_relaxed",
+  "description": "Validation rules specific to Synthea FHIR JSON files",
+  "extends": "core_validation_rules",
+  "created_date": "2025-11-11",
+  
+  "rules": [
+    {
+      "rule_id": "SYNTH-001",
+      "name": "fhir_bundle_structure",
+      "description": "File must be valid FHIR Bundle with entry array",
+      "severity": "error",
+      "condition": "resourceType != 'Bundle' OR entry array is missing",
+      "rationale": "Synthea generates Bundle resources; cannot parse other structures",
+      "action_on_failure": "Fail file",
+      "applies_to": ["synthea/fhir/*.json"]
+    },
+    {
+      "rule_id": "SYNTH-002",
+      "name": "patient_resource_present",
+      "description": "Bundle must contain at least one Patient resource",
+      "severity": "error",
+      "condition": "No entry with resourceType='Patient'",
+      "rationale": "Cannot derive patient-level metrics without Patient resource",
+      "action_on_failure": "Fail file",
+      "applies_to": ["synthea/fhir/*.json"]
+    },
+    {
+      "rule_id": "SYNTH-003",
+      "name": "encounter_temporal_flexibility",
+      "description": "Encounter may have period.start OR period.end (not both required)",
+      "severity": "warn",
+      "condition": "Encounter.period.start is NULL OR Encounter.period.end is NULL",
+      "rationale": "Real-world encounters may be ongoing or have incomplete temporal data",
+      "action_on_failure": "Set low_precision_time=1; use available field",
+      "applies_to": ["synthea/fhir/*.json"],
+      "v1_strict": "Error if either missing",
+      "v2_relaxed": "Warn if only one present"
+    },
+    {
+      "rule_id": "SYNTH-004",
+      "name": "patient_address_state_optional",
+      "description": "Patient.address.state may be missing; infer from city if possible",
+      "severity": "warn",
+      "condition": "Patient.address.state is NULL",
+      "rationale": "Synthea may generate incomplete addresses; city can provide state context",
+      "action_on_failure": "Attempt to infer from city; set ambiguous_geo=1",
+      "applies_to": ["synthea/fhir/*.json"],
+      "v1_strict": "Error if missing",
+      "v2_relaxed": "Warn + infer from city or set NULL"
+    },
+    {
+      "rule_id": "SYNTH-005",
+      "name": "observation_reference_range_optional",
+      "description": "Observation.referenceRange not required for all observations",
+      "severity": "warn",
+      "condition": "Observation.referenceRange is NULL",
+      "rationale": "Non-lab vitals (BP, temp) may not have standardized reference ranges",
+      "action_on_failure": "Set lab_oob_na=1; exclude from lab_oob_rate metric",
+      "applies_to": ["synthea/fhir/*.json"],
+      "v1_strict": "Error if missing",
+      "v2_relaxed": "Warn + flag for metric exclusion"
+    },
+    {
+      "rule_id": "SYNTH-006",
+      "name": "observation_value_derivation",
+      "description": "Observation value may be in valueQuantity OR component array",
+      "severity": "warn",
+      "condition": "valueQuantity is NULL but component array non-empty",
+      "rationale": "Multi-component observations (e.g., blood pressure) use component structure",
+      "action_on_failure": "Extract from component array; proceed",
+      "applies_to": ["synthea/fhir/*.json"],
+      "v1_strict": "Error if valueQuantity missing",
+      "v2_relaxed": "Warn + use component values"
+    },
+    {
+      "rule_id": "SYNTH-007",
+      "name": "coding_system_flexibility",
+      "description": "Allow unknown coding.system if code not needed for metrics",
+      "severity": "warn",
+      "condition": "coding.system not in ('http://loinc.org', 'http://snomed.info/sct')",
+      "rationale": "Local/proprietary codes valid for non-metric fields",
+      "action_on_failure": "Drop that specific code; file passes if other codes exist",
+      "applies_to": ["synthea/fhir/*.json"],
+      "v1_strict": "Error if system unknown",
+      "v2_relaxed": "Warn + drop code unless needed for metric"
+    },
+    {
+      "rule_id": "SYNTH-008",
+      "name": "cross_bundle_reference_tolerance",
+      "description": "Allow references to resources in different bundles",
+      "severity": "warn",
+      "condition": "subject.reference points to Patient not in same bundle",
+      "rationale": "Synthea may split large patient histories across multiple files",
+      "action_on_failure": "Assume valid if resourceType + ID match; warn",
+      "applies_to": ["synthea/fhir/*.json"],
+      "v1_strict": "Error if dangling reference",
+      "v2_relaxed": "Warn unless reference needed for temporal join"
+    },
+    {
+      "rule_id": "SYNTH-009",
+      "name": "observation_encounter_reference_required",
+      "description": "Observation must reference Encounter if needed for temporal join",
+      "severity": "error",
+      "condition": "Observation.encounter.reference is NULL AND encounter date needed for period_id",
+      "rationale": "Cannot derive processing month without encounter context",
+      "action_on_failure": "Fail file if >5% observations lack encounter reference",
+      "applies_to": ["synthea/fhir/*.json"]
+    },
+    {
+      "rule_id": "SYNTH-010",
+      "name": "json_parse_validity",
+      "description": "File must be valid JSON",
+      "severity": "error",
+      "condition": "JSON parsing fails",
+      "rationale": "Cannot process malformed JSON",
+      "action_on_failure": "Fail file",
+      "applies_to": ["synthea/fhir/*.json"]
+    }
+  ],
+  
+  "flag_definitions": {
+    "low_precision_time": {
+      "triggered_by": ["SYNTH-003"],
+      "description": "Only one temporal field present in Encounter",
+      "impact": "Excluded from month-stratified sensitivity analysis"
+    },
+    "ambiguous_geo": {
+      "triggered_by": ["SYNTH-004"],
+      "description": "State inferred from city or unknown",
+      "impact": "Excluded from VA-specific geographic aggregates"
+    },
+    "lab_oob_na": {
+      "triggered_by": ["SYNTH-005"],
+      "description": "Observation lacks reference range",
+      "impact": "Excluded from lab_oob_rate numerator/denominator"
+    }
+  },
+  
+  "synthea_specific_assumptions": {
+    "patient_id_format": "UUID v4 (e.g., '12345678-1234-1234-1234-123456789012')",
+    "bundle_size": "Typically 200KB - 50MB (varies by patient complexity)",
+    "resource_types_expected": [
+      "Patient",
+      "Encounter",
+      "Observation",
+      "Condition",
+      "Medication",
+      "MedicationRequest",
+      "Procedure",
+      "Immunization",
+      "Claim"
+    ],
+    "fhir_version": "R4 (4.0.1)",
+    "state_customization": "Default is Massachusetts; Virginia customization applied via -s Virginia flag"
+  },
+  
+  "validation_pass_criteria": {
+    "v1_strict": "All required fields present; no optional element variability allowed",
+    "v2_relaxed": "Core schema intact + >=1 temporal field + <5% metric-critical rows unusable"
+  },
+  
+  "cross_references": {
+    "synthea_documentation": "https://github.com/synthetichealth/synthea/wiki",
+    "fhir_r4_spec": "https://hl7.org/fhir/R4/",
+    "validation_policy": "docs/methods_validation_policy.md",
+    "data_dictionary": "data/raw/synthea/DATA_DICTIONARY.md"
+  }
+}

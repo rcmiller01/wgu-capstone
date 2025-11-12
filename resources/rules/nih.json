@@ -1,0 +1,184 @@
+{
+  "rule_pack_name": "nih_imaging_rules",
+  "version": "2.0_relaxed",
+  "description": "Validation rules specific to NIH Chest X-ray dataset (DICOM/PNG images)",
+  "extends": "core_validation_rules",
+  "created_date": "2025-11-11",
+  "status": "NOT_IMPLEMENTED",
+  "note": "NIH imaging data excluded from current pipeline due to missing state-level geography",
+  
+  "rules": [
+    {
+      "rule_id": "NIH-001",
+      "name": "image_file_readable",
+      "description": "Image file must be readable as valid DICOM or PNG",
+      "severity": "error",
+      "condition": "File cannot be opened by imaging library (pydicom, PIL)",
+      "rationale": "Cannot process corrupted or non-image files",
+      "action_on_failure": "Fail file",
+      "applies_to": ["nih_xray/**/*.dcm", "nih_xray/**/*.png"]
+    },
+    {
+      "rule_id": "NIH-002",
+      "name": "dicom_metadata_present",
+      "description": "DICOM file must have metadata header",
+      "severity": "error",
+      "condition": "DICOM header missing or corrupted",
+      "rationale": "Metadata needed for patient ID, study date, modality",
+      "action_on_failure": "Fail file",
+      "applies_to": ["nih_xray/**/*.dcm"]
+    },
+    {
+      "rule_id": "NIH-003",
+      "name": "patient_id_anonymized",
+      "description": "Patient ID must be anonymized (no real PHI)",
+      "severity": "error",
+      "condition": "Patient ID matches pattern suggesting real SSN or MRN",
+      "rationale": "Dataset should be de-identified",
+      "action_on_failure": "Fail file (data governance issue)",
+      "applies_to": ["nih_xray/**/*.dcm", "nih_xray/**/*.png"]
+    },
+    {
+      "rule_id": "NIH-004",
+      "name": "pathology_labels_present",
+      "description": "Image must have associated pathology labels CSV",
+      "severity": "warn",
+      "condition": "Image filename not found in pathology labels CSV",
+      "rationale": "Labels needed for clinical context, but not for pipeline metrics",
+      "action_on_failure": "Warn; proceed without labels",
+      "applies_to": ["nih_xray/**/*.png"]
+    },
+    {
+      "rule_id": "NIH-005",
+      "name": "nln_derived_labels_tolerance",
+      "description": "NLP-derived labels may have 10-15% error rate",
+      "severity": "warn",
+      "condition": "Label confidence score < 0.85",
+      "rationale": "Labels extracted via NLP from radiology reports (weak supervision)",
+      "action_on_failure": "Warn; flag low_confidence_label=1",
+      "applies_to": ["nih_xray/labels.csv"]
+    },
+    {
+      "rule_id": "NIH-006",
+      "name": "image_dimensions_valid",
+      "description": "Image must have non-zero width and height",
+      "severity": "error",
+      "condition": "Image width = 0 OR image height = 0",
+      "rationale": "Zero-dimension images cannot be processed",
+      "action_on_failure": "Fail file",
+      "applies_to": ["nih_xray/**/*.png"]
+    },
+    {
+      "rule_id": "NIH-007",
+      "name": "geographic_metadata_missing",
+      "description": "NIH dataset lacks state-level geography",
+      "severity": "error",
+      "condition": "No state field in DICOM metadata or labels CSV",
+      "rationale": "Cannot join to Virginia cohort without state information",
+      "action_on_failure": "Set nih_geo_limited=1; exclude from VA joins",
+      "applies_to": ["nih_xray/**/*"],
+      "workaround": "Use for image processing pipelines only, not geographic stratification"
+    },
+    {
+      "rule_id": "NIH-008",
+      "name": "study_date_derivable",
+      "description": "Image must have study date for temporal analysis",
+      "severity": "warn",
+      "condition": "DICOM StudyDate tag missing or invalid",
+      "rationale": "Temporal context needed for time-series analysis",
+      "action_on_failure": "Set low_precision_time=1; use file metadata date",
+      "applies_to": ["nih_xray/**/*.dcm"]
+    },
+    {
+      "rule_id": "NIH-009",
+      "name": "image_view_position_labeled",
+      "description": "Image should have view position (PA, AP, lateral)",
+      "severity": "warn",
+      "condition": "View position tag missing or 'Unknown'",
+      "rationale": "View position affects image interpretation",
+      "action_on_failure": "Warn; proceed without view position",
+      "applies_to": ["nih_xray/**/*.dcm", "nih_xray/**/*.png"]
+    },
+    {
+      "rule_id": "NIH-010",
+      "name": "multi_label_classification_tolerance",
+      "description": "Images may have multiple pathology labels",
+      "severity": "warn",
+      "condition": "Image has >1 pathology label",
+      "rationale": "Real-world chest X-rays often show multiple findings",
+      "action_on_failure": "Accept multi-label; flag for multi_pathology=1",
+      "applies_to": ["nih_xray/labels.csv"]
+    }
+  ],
+  
+  "flag_definitions": {
+    "nih_geo_limited": {
+      "triggered_by": ["NIH-007"],
+      "description": "NIH imaging data lacks state-level geography",
+      "impact": "Excluded from Virginia cohort joins; available for image processing only"
+    },
+    "low_precision_time": {
+      "triggered_by": ["NIH-008"],
+      "description": "Study date missing; using file metadata date",
+      "impact": "Reduced temporal precision for time-series analysis"
+    },
+    "low_confidence_label": {
+      "triggered_by": ["NIH-005"],
+      "description": "NLP-derived label has <85% confidence",
+      "impact": "May be excluded from clinical accuracy analyses"
+    },
+    "multi_pathology": {
+      "triggered_by": ["NIH-010"],
+      "description": "Image shows multiple pathology findings",
+      "impact": "Requires multi-label classification approach"
+    }
+  },
+  
+  "nih_specific_assumptions": {
+    "dataset_name": "NIH Chest X-ray14 / ChestX-ray14",
+    "total_images": "112,120 frontal-view X-ray images",
+    "pathology_labels": [
+      "Atelectasis",
+      "Cardiomegaly",
+      "Effusion",
+      "Infiltration",
+      "Mass",
+      "Nodule",
+      "Pneumonia",
+      "Pneumothorax",
+      "Consolidation",
+      "Edema",
+      "Emphysema",
+      "Fibrosis",
+      "Pleural_Thickening",
+      "Hernia",
+      "No Finding"
+    ],
+    "image_format": "PNG (converted from DICOM)",
+    "image_size": "~1024x1024 pixels, 8-bit grayscale",
+    "file_sizes": "Typically 50-200KB per PNG",
+    "temporal_coverage": "1992-2015",
+    "source_institution": "NIH Clinical Center",
+    "label_derivation": "NLP from radiology reports (ChestX-ray14 paper, Wang et al., 2017)"
+  },
+  
+  "current_implementation_status": {
+    "pipeline_integration": "NOT IMPLEMENTED",
+    "reason": "Missing state-level geography prevents Virginia cohort join",
+    "future_work": "Could be used for image processing pipeline benchmarks (latency for DICOM parsing, PNG compression)",
+    "geographic_limitation_documented": "docs/data_sources.md Limitations section"
+  },
+  
+  "validation_pass_criteria": {
+    "v1_strict": "All metadata present; labels validated; geographic data required",
+    "v2_relaxed": "Image readable + patient ID anonymized + nih_geo_limited=1 flag accepted"
+  },
+  
+  "cross_references": {
+    "nih_dataset": "https://www.kaggle.com/datasets/nih-chest-xrays/data",
+    "original_paper": "Wang et al. (2017). ChestX-ray8: Hospital-scale Chest X-ray Database",
+    "dicom_standard": "https://www.dicomstandard.org/",
+    "validation_policy": "docs/methods_validation_policy.md",
+    "data_dictionary": "data/raw/nih_xray/README.md"
+  }
+}
