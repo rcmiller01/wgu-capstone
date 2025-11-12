@@ -162,7 +162,7 @@ def main():
     parser.add_argument(
         "--cohort",
         type=Path,
-        default=Path("data/processed/synthea_cohort_va.parquet"),
+        default=Path("data/silver/patient_core"),
         help="Path to cohort data",
     )
     parser.add_argument(
