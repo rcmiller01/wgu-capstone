@@ -1,4 +1,4 @@
-.PHONY: init format lint test run all data clean analyze visualize notebooks help
+.PHONY: init format lint test smoke run all data clean analyze visualize notebooks help
 
 init:
 	python -m pip install -U pip
@@ -16,6 +16,16 @@ lint:
 
 test:
 	pytest -q
+
+smoke:
+	@echo "Running smoke test (quick validation)..."
+	@echo "1. Checking data availability..."
+	@test -f data/processed/cohort_fact_va.csv && echo "   ✓ Processed data found" || echo "   ⚠ Processed data missing"
+	@echo "2. Running tests..."
+	@pytest -q --tb=short
+	@echo "3. Generating summary statistics..."
+	@python -c "import pandas as pd; df = pd.read_csv('data/processed/cohort_fact_va.csv'); print(f'   ✓ Loaded {len(df)} rows, {len(df.columns)} columns')"
+	@echo "✓ Smoke test complete"
 
 run:
 	python -m src.pipeline
@@ -60,6 +70,7 @@ help:
 	@echo "WGU D610 Capstone - Available targets:"
 	@echo ""
 	@echo "  make init        - Install dependencies"
+	@echo "  make smoke       - Quick validation test (<2 minutes)"
 	@echo "  make all         - Run complete pipeline (data + analysis + visualization)"
 	@echo "  make data        - Download and clean data"
 	@echo "  make analyze     - Run EDA and statistical tests"

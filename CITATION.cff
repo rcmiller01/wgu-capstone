@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you reference this work, please cite it as below."
+authors:
+  - family-names: Miller
+    given-names: Robert C.
+    email: rcmiller@carilionclinic.org
+title: "WGU D610 Capstone: Synthetic Health Data Processing Pipeline Performance Analysis"
+version: 1.0.0
+date-released: 2025-11-12
+url: "https://github.com/rcmiller01/wgu-capstone"
+repository-code: "https://github.com/rcmiller01/wgu-capstone"
+license: MIT
+keywords:
+  - health data
+  - FHIR
+  - data pipeline
+  - synthetic data
+  - performance analysis
+  - serverless computing
+abstract: >
+  This project implements and evaluates a serverless FHIR data processing
+  pipeline that integrates synthetic health data from multiple sources
+  (Synthea, NHANES, VDH, NIH). The analysis examines pipeline validation
+  pass rates across data sources, processing latency distribution and
+  determinants, impact of data quality flags on performance metrics, and
+  statistical comparison of processing outcomes.
