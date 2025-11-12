@@ -207,5 +207,55 @@ For privacy questions:
 
 ---
 
-**Last Updated**: November 12, 2025  
+## Simulated Patient-Image Linkage
+
+**IMPORTANT**: The patient-image linkage in this project is **synthetic and simulated for demonstration purposes only**. It does NOT represent real patient-image associations.
+
+### Linkage Method
+
+The `build_link_table.py` script creates a Gold layer table (`customer_image_link.parquet`) that links imaging instances to patient records using a **deterministic hash-based mapping**:
+
+```python
+customer_id = hash_128(instance_uid + global_seed) % N + 1
+```
+
+Where:
+- `instance_uid`: DICOM SOPInstanceUID (unique identifier for each image)
+- `global_seed`: Fixed string "capstone_2025" for reproducibility
+- `hash_128`: First 128 bits (16 bytes) of SHA-256 hash
+- `N`: Total number of patients in Synthea cohort
+- Result: customer_id in range [1, N]
+
+### Limitations and Considerations
+
+1. **No Real Linkage**: The CT Sample Images dataset and Synthea patient records are completely independent. The hash-based mapping creates a **mathematically deterministic but clinically meaningless** association.
+
+2. **Demonstration Purpose**: This linkage enables:
+   - Testing ETL pipeline end-to-end
+   - Demonstrating data lake architecture (Bronze→Silver→Gold)
+   - Showing how imaging and clinical data could be joined in analytics queries
+   - Illustrating HIPAA-compliant pseudonymization techniques
+
+3. **Production Requirements**: A real-world deployment would require:
+   - **Proper MRN/Encounter Linkage**: Images linked via Medical Record Number (MRN) or encounter ID from hospital information systems
+   - **IRB Approval**: Patient consent and institutional review for linkage
+   - **Data Use Agreements**: Legal agreements between imaging source and clinical data source
+   - **Validation**: Clinical review to ensure linkage accuracy
+
+4. **Disclosure**: All analysis results must clearly state that patient-image associations are synthetic and not based on actual clinical records.
+
+### Deterministic Mapping Benefits
+
+The hash-based approach provides:
+- **Reproducibility**: Same instance_uid always maps to same customer_id
+- **Distribution**: Modulo operation distributes images across patient cohort
+- **Pseudonymization**: Linkage doesn't expose PHI directly
+- **Simplicity**: No complex matching logic or external databases required
+
+This approach is acceptable for academic demonstration but should NOT be used for clinical decision-making or research conclusions about specific patient conditions.
+
+---
+
+**Last Updated**: January 2025  
 **Status**: Compliant with HIPAA Safe Harbor for research use
+

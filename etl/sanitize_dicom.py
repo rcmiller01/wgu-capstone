@@ -2,21 +2,23 @@
 """
 Sanitize DICOM files by removing/redacting PHI tags.
 
-Implements DICOM de-identification per HIPAA Safe Harbor and DICOM PS3.15
-Annex E. Flags files with potential burned-in PHI for manual review.
+Implements DICOM de-identification per HIPAA Safe Harbor and DICOM
+PS3.15 Annex E. Flags files with potential burned-in PHI for manual
+review.
 
 Usage:
-    python etl/sanitize_dicom.py --input data/lake/bronze/imaging/ --output data/lake/silver/imaging/
+    python etl/sanitize_dicom.py \
+        --input data/raw/CT_Sample_Images/dicom_dir \
+        --output data/bronze/images/
 """
 
 import argparse
 import hashlib
 from pathlib import Path
-from typing import List, Set
+from typing import Optional
 
 import pandas as pd
 import pydicom
-from pydicom.tag import Tag
 
 
 # DICOM tags to remove (HIPAA identifiers per PS3.15 Annex E)
@@ -37,14 +39,6 @@ PHI_TAGS_TO_REMOVE = [
     "PlateID",
 ]
 
-# Tags that may contain burned-in text (require manual review)
-BURNED_IN_FLAGS = [
-    "BurnedInAnnotation",  # Explicit flag
-    "ImageComments",  # May contain patient info
-    "SeriesDescription",  # May contain patient identifiers
-    "StudyDescription",  # May contain patient identifiers
-]
-
 
 def hash_identifier(value: str, salt: str = "capstone_2025") -> str:
     """
@@ -60,45 +54,36 @@ def hash_identifier(value: str, salt: str = "capstone_2025") -> str:
     return hashlib.sha256(f"{salt}:{value}".encode()).hexdigest()[:16]
 
 
-def check_burned_in_phi(ds: pydicom.Dataset) -> List[str]:
+def check_burned_in_annotation(ds: pydicom.Dataset) -> bool:
     """
-    Check for potential burned-in PHI in DICOM file.
+    Check for burned-in annotation flag in DICOM.
+
+    Per DICOM tag (0028,0301) BurnedInAnnotation:
+    - "YES" = burned-in text present
+    - "NO" = no burned-in text
+    - Missing = assume potential burned-in text (flag as True)
 
     Args:
         ds: pydicom Dataset
 
     Returns:
-        List of warning messages if burned-in PHI detected
+        True if burned-in text detected or tag missing, False otherwise
     """
-    warnings = []
+    if not hasattr(ds, "BurnedInAnnotation"):
+        # Tag missing - assume potential burned-in text
+        return True
 
-    # Check explicit BurnedInAnnotation flag
-    if hasattr(ds, "BurnedInAnnotation") and ds.BurnedInAnnotation == "YES":
-        warnings.append("BurnedInAnnotation=YES (explicit flag)")
-
-    # Check ImageComments for suspicious patterns
-    if hasattr(ds, "ImageComments"):
-        comments = str(ds.ImageComments).upper()
-        suspicious_patterns = ["PATIENT", "NAME", "MRN", "DOB", "SSN"]
-        for pattern in suspicious_patterns:
-            if pattern in comments:
-                warnings.append(f"ImageComments contains '{pattern}'")
-
-    # Check descriptions for identifiers
-    for tag in ["SeriesDescription", "StudyDescription"]:
-        if hasattr(ds, tag):
-            desc = str(getattr(ds, tag)).upper()
-            if any(p in desc for p in ["PATIENT", "MRN", "ID:"]):
-                warnings.append(f"{tag} may contain identifiers")
-
-    return warnings
+    burned_in = str(ds.BurnedInAnnotation).upper()
+    return burned_in == "YES" or burned_in == ""
 
 
 def sanitize_dicom(
-    dicom_path: Path, output_path: Path, pseudonymize: bool = True
+    dicom_path: Path, output_path: Path, pseudonymize: bool = False
 ) -> dict:
     """
     Sanitize a single DICOM file by removing/redacting PHI.
+
+    Note: Does NOT transform pixel data. Only flags burned-in text.
 
     Args:
         dicom_path: Input DICOM file
@@ -115,15 +100,22 @@ def sanitize_dicom(
         "output_file": str(output_path),
         "tags_removed": [],
         "tags_pseudonymized": [],
-        "burned_in_warnings": [],
+        "burned_in_text_flag": False,
     }
+
+    # Check burned-in annotation BEFORE removing tags
+    summary["burned_in_text_flag"] = check_burned_in_annotation(ds)
 
     # Remove PHI tags
     for tag_name in PHI_TAGS_TO_REMOVE:
         if hasattr(ds, tag_name):
             original_value = str(getattr(ds, tag_name))
 
-            if pseudonymize and tag_name in ["PatientID", "StudyID", "AccessionNumber"]:
+            if pseudonymize and tag_name in [
+                "PatientID",
+                "StudyID",
+                "AccessionNumber",
+            ]:
                 # Pseudonymize key identifiers (for linking)
                 hashed_value = hash_identifier(original_value)
                 setattr(ds, tag_name, hashed_value)
@@ -135,15 +127,14 @@ def sanitize_dicom(
                 delattr(ds, tag_name)
                 summary["tags_removed"].append(tag_name)
 
-    # Check for burned-in PHI
-    burned_in_warnings = check_burned_in_phi(ds)
-    summary["burned_in_warnings"] = burned_in_warnings
+    # Remove private tags (vendor-specific, may contain PHI)
+    ds.remove_private_tags()
 
     # Add de-identification note
     ds.PatientIdentityRemoved = "YES"
     ds.DeidentificationMethod = "HIPAA Safe Harbor + DICOM PS3.15 Annex E"
 
-    # Write sanitized DICOM
+    # Write sanitized DICOM (do NOT transform pixel data)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     ds.save_as(str(output_path), write_like_original=False)
 
@@ -151,7 +142,9 @@ def sanitize_dicom(
 
 
 def sanitize_batch(
-    input_dir: Path, output_dir: Path, parquet_input: Path = None
+    input_dir: Path,
+    output_dir: Path,
+    parquet_input: Optional[Path] = None
 ) -> None:
     """
     Sanitize a batch of DICOM files.
@@ -167,7 +160,9 @@ def sanitize_batch(
     if parquet_input and parquet_input.exists():
         # Use Bronze parquet as source
         df = pd.read_parquet(parquet_input)
-        dicom_files = [Path(p) for p in df["file_path"] if Path(p).exists()]
+        dicom_files = [
+            Path(p) for p in df["file_path"] if Path(p).exists()
+        ]
     else:
         # Scan directory
         dicom_files = list(input_dir.glob("**/*.dcm"))
@@ -183,12 +178,14 @@ def sanitize_batch(
         output_path = output_dir / rel_path
 
         try:
-            summary = sanitize_dicom(dicom_path, output_path, pseudonymize=True)
+            summary = sanitize_dicom(
+                dicom_path, output_path, pseudonymize=True
+            )
             summaries.append(summary)
 
-            if summary["burned_in_warnings"]:
+            if summary["burned_in_text_flag"]:
                 burned_in_count += 1
-                print(f"⚠ {dicom_path.name}: {summary['burned_in_warnings']}")
+                print(f"⚠ {dicom_path.name}: burned-in text detected")
 
         except Exception as e:
             print(f"✗ Error processing {dicom_path}: {e}")
@@ -202,12 +199,14 @@ def sanitize_batch(
 
     print(f"\n✓ Sanitized {len(summaries)} DICOM files")
     print(f"  Output: {output_dir}")
-    print(f"  Files flagged for burned-in PHI: {burned_in_count}")
+    print(f"  Files flagged for burned-in text: {burned_in_count}")
     print(f"  Report: {report_path}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Sanitize DICOM files (remove PHI)")
+    parser = argparse.ArgumentParser(
+        description="Sanitize DICOM files (remove PHI)"
+    )
     parser.add_argument(
         "--input",
         type=Path,
@@ -217,7 +216,7 @@ def main():
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("data/lake/silver/imaging/dicom_sanitized"),
+        default=Path("data/bronze/images"),
         help="Output directory for sanitized DICOM files",
     )
     parser.add_argument(
@@ -229,7 +228,9 @@ def main():
     args = parser.parse_args()
 
     sanitize_batch(
-        input_dir=args.input, output_dir=args.output, parquet_input=args.bronze_parquet
+        input_dir=args.input,
+        output_dir=args.output,
+        parquet_input=args.bronze_parquet,
     )
 
 
