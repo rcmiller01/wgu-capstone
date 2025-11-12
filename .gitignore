@@ -23,3 +23,4 @@ reports/figures/*
 .vscode/
 .idea/
 resources/synthea-with-dependencies.jar
+data.zip
