@@ -1,6 +1,6 @@
 # Data Validation Report
 
-**Generated**: 2025-11-11 19:59:25
+**Generated**: 2025-11-11 20:13:35
 
 **Data Source**: `data/processed/processed_data.parquet`
 
@@ -70,11 +70,11 @@
 
 | nhanes | 8 | 5.63 | 5.94 | 6.59 | 100.0% | 20.42 |
 
-| synthea | 1,000 | 20.46 | 16.16 | 42.06 | 94.8% | 3569.44 |
+| synthea | 1,000 | 20.46 | 16.16 | 42.06 | 95.9% | 3569.44 |
 
 | vdh | 2 | 3.44 | 3.44 | 4.09 | 100.0% | 249.82 |
 
-| ALL | 1,010 | 20.31 | 16.12 | 41.56 | 94.8% | 3534.76 |
+| ALL | 1,010 | 20.31 | 16.12 | 41.56 | 95.9% | 3534.76 |
 
 
 ## 5. Performance Threshold Achievement
@@ -83,7 +83,7 @@
 
 - ✅ **P95 Latency**: 41.56s (target: ≤120s)
 
-- ⚠️ **Validation Rate**: 94.9% (target: ≥95%)
+- ✅ **Validation Rate**: 95.9% (target: ≥95%)
 
 
 ## 6. Data Readiness for Analysis
