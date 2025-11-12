@@ -1,170 +1,404 @@
 {
-  "rule_pack_name": "synthea_fhir_rules",
-  "version": "2.0_relaxed",
-  "description": "Validation rules specific to Synthea FHIR JSON files",
-  "extends": "core_validation_rules",
-  "created_date": "2025-11-11",
-  
+  "rule_set": "synthea",
+  "version": "1.0.0",
+  "description": "Validation rules specific to Synthea FHIR synthetic patient data",
+  "applies_to": ["synthea"],
+  "source_id": "FHIR",
   "rules": [
     {
-      "rule_id": "SYNTH-001",
-      "name": "fhir_bundle_structure",
-      "description": "File must be valid FHIR Bundle with entry array",
+      "rule_id": "syn_001",
+      "field": "resourceType",
+      "check": "schema_presence",
+      "params": {
+        "required": true,
+        "before_transform": true
+      },
       "severity": "error",
-      "condition": "resourceType != 'Bundle' OR entry array is missing",
-      "rationale": "Synthea generates Bundle resources; cannot parse other structures",
-      "action_on_failure": "Fail file",
-      "applies_to": ["synthea/fhir/*.json"]
+      "on_fail_hint": "FHIR resourceType field missing; verify JSON structure has entry[].resource.resourceType"
     },
     {
-      "rule_id": "SYNTH-002",
-      "name": "patient_resource_present",
-      "description": "Bundle must contain at least one Patient resource",
+      "rule_id": "syn_002",
+      "field": "resourceType",
+      "check": "enum_check",
+      "params": {
+        "allowed_values": [
+          "Patient", "Encounter", "Condition", "Observation", "MedicationRequest",
+          "Procedure", "Immunization", "AllergyIntolerance", "CarePlan", "Claim",
+          "Organization", "Practitioner", "DiagnosticReport"
+        ]
+      },
       "severity": "error",
-      "condition": "No entry with resourceType='Patient'",
-      "rationale": "Cannot derive patient-level metrics without Patient resource",
-      "action_on_failure": "Fail file",
-      "applies_to": ["synthea/fhir/*.json"]
+      "on_fail_hint": "Unexpected FHIR resourceType; check against Synthea expected resource types"
     },
     {
-      "rule_id": "SYNTH-003",
-      "name": "encounter_temporal_flexibility",
-      "description": "Encounter may have period.start OR period.end (not both required)",
-      "severity": "warn",
-      "condition": "Encounter.period.start is NULL OR Encounter.period.end is NULL",
-      "rationale": "Real-world encounters may be ongoing or have incomplete temporal data",
-      "action_on_failure": "Set low_precision_time=1; use available field",
-      "applies_to": ["synthea/fhir/*.json"],
-      "v1_strict": "Error if either missing",
-      "v2_relaxed": "Warn if only one present"
-    },
-    {
-      "rule_id": "SYNTH-004",
-      "name": "patient_address_state_optional",
-      "description": "Patient.address.state may be missing; infer from city if possible",
-      "severity": "warn",
-      "condition": "Patient.address.state is NULL",
-      "rationale": "Synthea may generate incomplete addresses; city can provide state context",
-      "action_on_failure": "Attempt to infer from city; set ambiguous_geo=1",
-      "applies_to": ["synthea/fhir/*.json"],
-      "v1_strict": "Error if missing",
-      "v2_relaxed": "Warn + infer from city or set NULL"
-    },
-    {
-      "rule_id": "SYNTH-005",
-      "name": "observation_reference_range_optional",
-      "description": "Observation.referenceRange not required for all observations",
-      "severity": "warn",
-      "condition": "Observation.referenceRange is NULL",
-      "rationale": "Non-lab vitals (BP, temp) may not have standardized reference ranges",
-      "action_on_failure": "Set lab_oob_na=1; exclude from lab_oob_rate metric",
-      "applies_to": ["synthea/fhir/*.json"],
-      "v1_strict": "Error if missing",
-      "v2_relaxed": "Warn + flag for metric exclusion"
-    },
-    {
-      "rule_id": "SYNTH-006",
-      "name": "observation_value_derivation",
-      "description": "Observation value may be in valueQuantity OR component array",
-      "severity": "warn",
-      "condition": "valueQuantity is NULL but component array non-empty",
-      "rationale": "Multi-component observations (e.g., blood pressure) use component structure",
-      "action_on_failure": "Extract from component array; proceed",
-      "applies_to": ["synthea/fhir/*.json"],
-      "v1_strict": "Error if valueQuantity missing",
-      "v2_relaxed": "Warn + use component values"
-    },
-    {
-      "rule_id": "SYNTH-007",
-      "name": "coding_system_flexibility",
-      "description": "Allow unknown coding.system if code not needed for metrics",
-      "severity": "warn",
-      "condition": "coding.system not in ('http://loinc.org', 'http://snomed.info/sct')",
-      "rationale": "Local/proprietary codes valid for non-metric fields",
-      "action_on_failure": "Drop that specific code; file passes if other codes exist",
-      "applies_to": ["synthea/fhir/*.json"],
-      "v1_strict": "Error if system unknown",
-      "v2_relaxed": "Warn + drop code unless needed for metric"
-    },
-    {
-      "rule_id": "SYNTH-008",
-      "name": "cross_bundle_reference_tolerance",
-      "description": "Allow references to resources in different bundles",
-      "severity": "warn",
-      "condition": "subject.reference points to Patient not in same bundle",
-      "rationale": "Synthea may split large patient histories across multiple files",
-      "action_on_failure": "Assume valid if resourceType + ID match; warn",
-      "applies_to": ["synthea/fhir/*.json"],
-      "v1_strict": "Error if dangling reference",
-      "v2_relaxed": "Warn unless reference needed for temporal join"
-    },
-    {
-      "rule_id": "SYNTH-009",
-      "name": "observation_encounter_reference_required",
-      "description": "Observation must reference Encounter if needed for temporal join",
+      "rule_id": "syn_003",
+      "field": "Patient.id",
+      "check": "schema_presence",
+      "params": {
+        "required": true,
+        "resource_type": "Patient"
+      },
       "severity": "error",
-      "condition": "Observation.encounter.reference is NULL AND encounter date needed for period_id",
-      "rationale": "Cannot derive processing month without encounter context",
-      "action_on_failure": "Fail file if >5% observations lack encounter reference",
-      "applies_to": ["synthea/fhir/*.json"]
+      "on_fail_hint": "Patient.id is required for FHIR Patient resource; check JSON path entry[].resource.id"
     },
     {
-      "rule_id": "SYNTH-010",
-      "name": "json_parse_validity",
-      "description": "File must be valid JSON",
+      "rule_id": "syn_004",
+      "field": "Patient.id",
+      "check": "uniqueness",
+      "params": {
+        "scope": "per_file",
+        "resource_type": "Patient"
+      },
       "severity": "error",
-      "condition": "JSON parsing fails",
-      "rationale": "Cannot process malformed JSON",
-      "action_on_failure": "Fail file",
-      "applies_to": ["synthea/fhir/*.json"]
+      "on_fail_hint": "Duplicate Patient.id within file; each Synthea file should have 1 Patient resource"
+    },
+    {
+      "rule_id": "syn_005",
+      "field": "Patient.birthDate",
+      "check": "schema_presence",
+      "params": {
+        "required": true,
+        "resource_type": "Patient"
+      },
+      "severity": "error",
+      "on_fail_hint": "Patient.birthDate is required; verify FHIR Patient resource completeness"
+    },
+    {
+      "rule_id": "syn_006",
+      "field": "Patient.birthDate",
+      "check": "date_format",
+      "params": {
+        "format": "YYYY-MM-DD",
+        "resource_type": "Patient"
+      },
+      "severity": "error",
+      "on_fail_hint": "Patient.birthDate must be ISO 8601 date (YYYY-MM-DD); parse and validate format"
+    },
+    {
+      "rule_id": "syn_007",
+      "field": "Patient.birthDate",
+      "check": "range_check",
+      "params": {
+        "min": "1900-01-01",
+        "max": "2025-12-31",
+        "resource_type": "Patient"
+      },
+      "severity": "warning",
+      "on_fail_hint": "Patient.birthDate outside reasonable range; Synthea defaults to 1900-2025"
+    },
+    {
+      "rule_id": "syn_008",
+      "field": "Patient.gender",
+      "check": "schema_presence",
+      "params": {
+        "required": true,
+        "resource_type": "Patient"
+      },
+      "severity": "error",
+      "on_fail_hint": "Patient.gender is required FHIR field; check resource completeness"
+    },
+    {
+      "rule_id": "syn_009",
+      "field": "Patient.gender",
+      "check": "enum_check",
+      "params": {
+        "allowed_values": ["male", "female", "other", "unknown"],
+        "resource_type": "Patient"
+      },
+      "severity": "error",
+      "on_fail_hint": "Patient.gender must be male|female|other|unknown per FHIR spec"
+    },
+    {
+      "rule_id": "syn_010",
+      "field": "Patient.address[0].state",
+      "check": "schema_presence",
+      "params": {
+        "required": true,
+        "resource_type": "Patient"
+      },
+      "severity": "warning",
+      "on_fail_hint": "Patient.address[0].state missing; required for state_abbr derivation; default Synthea has MA addresses"
+    },
+    {
+      "rule_id": "syn_011",
+      "field": "Patient.address[0].state",
+      "check": "enum_check",
+      "params": {
+        "allowed_values": ["VA", "MA"],
+        "resource_type": "Patient",
+        "note": "VA for analysis; MA is Synthea default"
+      },
+      "severity": "info",
+      "on_fail_hint": "Patient state should be VA for this analysis; if MA, consider remapping or filtering"
+    },
+    {
+      "rule_id": "syn_012",
+      "field": "Encounter.status",
+      "check": "enum_check",
+      "params": {
+        "allowed_values": ["finished", "in-progress", "cancelled", "entered-in-error"],
+        "resource_type": "Encounter"
+      },
+      "severity": "warning",
+      "on_fail_hint": "Encounter.status should be finished for historical data; other values may indicate data quality issues"
+    },
+    {
+      "rule_id": "syn_013",
+      "field": "Encounter.class.code",
+      "check": "enum_check",
+      "params": {
+        "allowed_values": ["AMB", "EMER", "IMP", "ACUTE", "NONAC", "VR", "HH"],
+        "resource_type": "Encounter"
+      },
+      "severity": "error",
+      "on_fail_hint": "Encounter.class.code must be valid FHIR encounter class; check against v3-ActCode value set"
+    },
+    {
+      "rule_id": "syn_014",
+      "field": "Encounter.period.start",
+      "check": "schema_presence",
+      "params": {
+        "required": true,
+        "resource_type": "Encounter"
+      },
+      "severity": "error",
+      "on_fail_hint": "Encounter.period.start is required for temporal derivation; check FHIR Encounter resource"
+    },
+    {
+      "rule_id": "syn_015",
+      "field": "Encounter.period.start",
+      "check": "date_format",
+      "params": {
+        "format": "YYYY-MM-DDTHH:MM:SS",
+        "resource_type": "Encounter"
+      },
+      "severity": "error",
+      "on_fail_hint": "Encounter.period.start must be ISO 8601 datetime; parse with timezone handling"
+    },
+    {
+      "rule_id": "syn_016",
+      "field": "Observation.status",
+      "check": "enum_check",
+      "params": {
+        "allowed_values": ["final", "preliminary", "amended", "cancelled", "corrected"],
+        "resource_type": "Observation"
+      },
+      "severity": "warning",
+      "on_fail_hint": "Observation.status should be 'final' for most completed observations"
+    },
+    {
+      "rule_id": "syn_017",
+      "field": "Observation.code.coding[0].system",
+      "check": "enum_check",
+      "params": {
+        "allowed_values": ["http://loinc.org"],
+        "resource_type": "Observation"
+      },
+      "severity": "error",
+      "on_fail_hint": "Observation.code.coding[0].system should be http://loinc.org for standard lab/vital codes"
+    },
+    {
+      "rule_id": "syn_018",
+      "field": "Observation.valueQuantity.value",
+      "check": "dtype_enforcement",
+      "params": {
+        "dtype": "float64",
+        "resource_type": "Observation"
+      },
+      "severity": "error",
+      "on_fail_hint": "Observation.valueQuantity.value must be numeric; cast to float64"
+    },
+    {
+      "rule_id": "syn_019",
+      "field": "Observation.valueQuantity.value",
+      "check": "range_check",
+      "params": {
+        "conditional": "if code.coding[0].code == '39156-5' then value.between(10, 80)",
+        "description": "BMI range check",
+        "resource_type": "Observation"
+      },
+      "severity": "warning",
+      "on_fail_hint": "BMI (LOINC 39156-5) outside physiological range 10-80; check for data quality issues"
+    },
+    {
+      "rule_id": "syn_020",
+      "field": "Observation.valueQuantity.value",
+      "check": "range_check",
+      "params": {
+        "conditional": "if code.coding[0].code == '8480-6' then value.between(60, 250)",
+        "description": "Systolic BP range check",
+        "resource_type": "Observation"
+      },
+      "severity": "warning",
+      "on_fail_hint": "Systolic BP (LOINC 8480-6) outside range 60-250 mmHg; verify observation validity"
+    },
+    {
+      "rule_id": "syn_021",
+      "field": "Condition.code.coding[0].system",
+      "check": "enum_check",
+      "params": {
+        "allowed_values": ["http://snomed.info/sct"],
+        "resource_type": "Condition"
+      },
+      "severity": "error",
+      "on_fail_hint": "Condition.code.coding[0].system should be http://snomed.info/sct for SNOMED CT codes"
+    },
+    {
+      "rule_id": "syn_022",
+      "field": "Condition.clinicalStatus.coding[0].code",
+      "check": "enum_check",
+      "params": {
+        "allowed_values": ["active", "recurrence", "relapse", "inactive", "remission", "resolved"],
+        "resource_type": "Condition"
+      },
+      "severity": "warning",
+      "on_fail_hint": "Condition.clinicalStatus must be valid FHIR clinical status code"
+    },
+    {
+      "rule_id": "syn_023",
+      "field": "customer_id",
+      "check": "schema_presence",
+      "params": {
+        "required": true,
+        "after_transform": true
+      },
+      "severity": "error",
+      "on_fail_hint": "customer_id must be generated via HMAC_SHA256(patient_id, ENV:CAPSTONE_HMAC_SALT)"
+    },
+    {
+      "rule_id": "syn_024",
+      "field": "customer_id",
+      "check": "format_check",
+      "params": {
+        "pattern": "^[a-f0-9]{64}$",
+        "description": "SHA256 hex digest (64 chars)"
+      },
+      "severity": "error",
+      "on_fail_hint": "customer_id should be 64-character hex string (SHA256 output); verify HMAC implementation"
+    },
+    {
+      "rule_id": "syn_025",
+      "field": "customer_id",
+      "check": "uniqueness",
+      "params": {
+        "scope": "global"
+      },
+      "severity": "warning",
+      "on_fail_hint": "Duplicate customer_id detected; HMAC should produce unique hashes for unique patient_id inputs"
+    },
+    {
+      "rule_id": "syn_026",
+      "field": "*",
+      "check": "phi_removal",
+      "params": {
+        "dropped_fields": ["name.family", "name.given", "address.line", "telecom", "Patient.id"],
+        "after_transform": true
+      },
+      "severity": "error",
+      "on_fail_hint": "PHI-like fields must be dropped after customer_id generation; verify cleaning pipeline"
+    },
+    {
+      "rule_id": "syn_027",
+      "field": "state_abbr",
+      "check": "filter_validation",
+      "params": {
+        "expected_value": "VA",
+        "after_filter": true
+      },
+      "severity": "warning",
+      "on_fail_hint": "After filtering, all records should have state_abbr='VA'; verify filter applied correctly"
+    },
+    {
+      "rule_id": "syn_028",
+      "field": "low_precision_time",
+      "check": "value_check",
+      "params": {
+        "expected_value": false,
+        "reason": "Synthea has full datetime precision"
+      },
+      "severity": "info",
+      "on_fail_hint": "Synthea data should have low_precision_time=False (full datetime available); unexpected if True"
+    },
+    {
+      "rule_id": "syn_029",
+      "field": "nih_geo_limited",
+      "check": "value_check",
+      "params": {
+        "expected_value": false,
+        "reason": "Synthea is not NIH data"
+      },
+      "severity": "error",
+      "on_fail_hint": "nih_geo_limited should be False for Synthea; this flag is NIH-specific"
     }
   ],
-  
-  "flag_definitions": {
-    "low_precision_time": {
-      "triggered_by": ["SYNTH-003"],
-      "description": "Only one temporal field present in Encounter",
-      "impact": "Excluded from month-stratified sensitivity analysis"
+  "resource_specific_rules": {
+    "Patient": {
+      "required_fields": ["id", "birthDate", "gender", "address[0].state"],
+      "cardinality": "exactly_one_per_file"
     },
-    "ambiguous_geo": {
-      "triggered_by": ["SYNTH-004"],
-      "description": "State inferred from city or unknown",
-      "impact": "Excluded from VA-specific geographic aggregates"
+    "Encounter": {
+      "required_fields": ["id", "status", "class", "period.start", "subject.reference"],
+      "cardinality": "one_or_more_per_patient"
     },
-    "lab_oob_na": {
-      "triggered_by": ["SYNTH-005"],
-      "description": "Observation lacks reference range",
-      "impact": "Excluded from lab_oob_rate numerator/denominator"
+    "Observation": {
+      "required_fields": ["id", "status", "code", "subject.reference"],
+      "optional_fields": ["valueQuantity", "valueCodeableConcept"],
+      "cardinality": "zero_or_more_per_patient"
+    },
+    "Condition": {
+      "required_fields": ["id", "code", "subject.reference"],
+      "cardinality": "zero_or_more_per_patient"
     }
   },
-  
-  "synthea_specific_assumptions": {
-    "patient_id_format": "UUID v4 (e.g., '12345678-1234-1234-1234-123456789012')",
-    "bundle_size": "Typically 200KB - 50MB (varies by patient complexity)",
-    "resource_types_expected": [
-      "Patient",
-      "Encounter",
-      "Observation",
-      "Condition",
-      "Medication",
-      "MedicationRequest",
-      "Procedure",
-      "Immunization",
-      "Claim"
-    ],
-    "fhir_version": "R4 (4.0.1)",
-    "state_customization": "Default is Massachusetts; Virginia customization applied via -s Virginia flag"
-  },
-  
-  "validation_pass_criteria": {
-    "v1_strict": "All required fields present; no optional element variability allowed",
-    "v2_relaxed": "Core schema intact + >=1 temporal field + <5% metric-critical rows unusable"
-  },
-  
-  "cross_references": {
-    "synthea_documentation": "https://github.com/synthetichealth/synthea/wiki",
-    "fhir_r4_spec": "https://hl7.org/fhir/R4/",
-    "validation_policy": "docs/methods_validation_policy.md",
-    "data_dictionary": "data/raw/synthea/DATA_DICTIONARY.md"
-  }
+  "loinc_specific_checks": [
+    {
+      "loinc_code": "8302-2",
+      "display": "Body height",
+      "unit": "cm",
+      "min_value": 50,
+      "max_value": 230
+    },
+    {
+      "loinc_code": "29463-7",
+      "display": "Body weight",
+      "unit": "kg",
+      "min_value": 2,
+      "max_value": 300
+    },
+    {
+      "loinc_code": "39156-5",
+      "display": "BMI",
+      "unit": "kg/m2",
+      "min_value": 10,
+      "max_value": 80
+    },
+    {
+      "loinc_code": "8480-6",
+      "display": "Systolic BP",
+      "unit": "mmHg",
+      "min_value": 60,
+      "max_value": 250
+    },
+    {
+      "loinc_code": "8462-4",
+      "display": "Diastolic BP",
+      "unit": "mmHg",
+      "min_value": 40,
+      "max_value": 150
+    },
+    {
+      "loinc_code": "2093-3",
+      "display": "Total cholesterol",
+      "unit": "mg/dL",
+      "min_value": 50,
+      "max_value": 600
+    },
+    {
+      "loinc_code": "4548-4",
+      "display": "Hemoglobin A1c",
+      "unit": "%",
+      "min_value": 3,
+      "max_value": 20
+    }
+  ]
 }

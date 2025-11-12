@@ -1,184 +1,337 @@
 {
-  "rule_pack_name": "nih_imaging_rules",
-  "version": "2.0_relaxed",
-  "description": "Validation rules specific to NIH Chest X-ray dataset (DICOM/PNG images)",
-  "extends": "core_validation_rules",
-  "created_date": "2025-11-11",
-  "status": "NOT_IMPLEMENTED",
-  "note": "NIH imaging data excluded from current pipeline due to missing state-level geography",
-  
+  "rule_set": "nih",
+  "version": "1.0.0",
+  "description": "Validation rules specific to NIH chest X-ray image metadata",
+  "applies_to": ["nih"],
+  "source_id": "IMG_META",
   "rules": [
     {
-      "rule_id": "NIH-001",
-      "name": "image_file_readable",
-      "description": "Image file must be readable as valid DICOM or PNG",
+      "rule_id": "nih_001",
+      "field": "image_id",
+      "check": "schema_presence",
+      "params": {
+        "required": true
+      },
       "severity": "error",
-      "condition": "File cannot be opened by imaging library (pydicom, PIL)",
-      "rationale": "Cannot process corrupted or non-image files",
-      "action_on_failure": "Fail file",
-      "applies_to": ["nih_xray/**/*.dcm", "nih_xray/**/*.png"]
+      "on_fail_hint": "image_id is required primary key for NIH image metadata; verify data source schema"
     },
     {
-      "rule_id": "NIH-002",
-      "name": "dicom_metadata_present",
-      "description": "DICOM file must have metadata header",
+      "rule_id": "nih_002",
+      "field": "image_id",
+      "check": "dtype_enforcement",
+      "params": {
+        "dtype": "string",
+        "nullable": false
+      },
       "severity": "error",
-      "condition": "DICOM header missing or corrupted",
-      "rationale": "Metadata needed for patient ID, study date, modality",
-      "action_on_failure": "Fail file",
-      "applies_to": ["nih_xray/**/*.dcm"]
+      "on_fail_hint": "Convert image_id to string dtype"
     },
     {
-      "rule_id": "NIH-003",
-      "name": "patient_id_anonymized",
-      "description": "Patient ID must be anonymized (no real PHI)",
+      "rule_id": "nih_003",
+      "field": "image_id",
+      "check": "uniqueness",
+      "params": {
+        "scope": "global"
+      },
       "severity": "error",
-      "condition": "Patient ID matches pattern suggesting real SSN or MRN",
-      "rationale": "Dataset should be de-identified",
-      "action_on_failure": "Fail file (data governance issue)",
-      "applies_to": ["nih_xray/**/*.dcm", "nih_xray/**/*.png"]
+      "on_fail_hint": "Duplicate image_id detected; NIH image IDs should be unique"
     },
     {
-      "rule_id": "NIH-004",
-      "name": "pathology_labels_present",
-      "description": "Image must have associated pathology labels CSV",
-      "severity": "warn",
-      "condition": "Image filename not found in pathology labels CSV",
-      "rationale": "Labels needed for clinical context, but not for pipeline metrics",
-      "action_on_failure": "Warn; proceed without labels",
-      "applies_to": ["nih_xray/**/*.png"]
-    },
-    {
-      "rule_id": "NIH-005",
-      "name": "nln_derived_labels_tolerance",
-      "description": "NLP-derived labels may have 10-15% error rate",
-      "severity": "warn",
-      "condition": "Label confidence score < 0.85",
-      "rationale": "Labels extracted via NLP from radiology reports (weak supervision)",
-      "action_on_failure": "Warn; flag low_confidence_label=1",
-      "applies_to": ["nih_xray/labels.csv"]
-    },
-    {
-      "rule_id": "NIH-006",
-      "name": "image_dimensions_valid",
-      "description": "Image must have non-zero width and height",
+      "rule_id": "nih_004",
+      "field": "finding_labels",
+      "check": "schema_presence",
+      "params": {
+        "required": true
+      },
       "severity": "error",
-      "condition": "Image width = 0 OR image height = 0",
-      "rationale": "Zero-dimension images cannot be processed",
-      "action_on_failure": "Fail file",
-      "applies_to": ["nih_xray/**/*.png"]
+      "on_fail_hint": "finding_labels field is required for NIH chest X-ray classification; check metadata schema"
     },
     {
-      "rule_id": "NIH-007",
-      "name": "geographic_metadata_missing",
-      "description": "NIH dataset lacks state-level geography",
+      "rule_id": "nih_005",
+      "field": "finding_labels",
+      "check": "dtype_enforcement",
+      "params": {
+        "dtype": "string",
+        "nullable": false
+      },
       "severity": "error",
-      "condition": "No state field in DICOM metadata or labels CSV",
-      "rationale": "Cannot join to Virginia cohort without state information",
-      "action_on_failure": "Set nih_geo_limited=1; exclude from VA joins",
-      "applies_to": ["nih_xray/**/*"],
-      "workaround": "Use for image processing pipelines only, not geographic stratification"
+      "on_fail_hint": "Convert finding_labels to string dtype (pipe-separated values)"
     },
     {
-      "rule_id": "NIH-008",
-      "name": "study_date_derivable",
-      "description": "Image must have study date for temporal analysis",
-      "severity": "warn",
-      "condition": "DICOM StudyDate tag missing or invalid",
-      "rationale": "Temporal context needed for time-series analysis",
-      "action_on_failure": "Set low_precision_time=1; use file metadata date",
-      "applies_to": ["nih_xray/**/*.dcm"]
+      "rule_id": "nih_006",
+      "field": "finding_labels",
+      "check": "enum_subset_check",
+      "params": {
+        "allowed_values": [
+          "No Finding", "Atelectasis", "Cardiomegaly", "Effusion", "Infiltration",
+          "Mass", "Nodule", "Pneumonia", "Pneumothorax", "Consolidation",
+          "Edema", "Emphysema", "Fibrosis", "Pleural_Thickening", "Hernia"
+        ],
+        "separator": "|",
+        "note": "Findings are pipe-delimited; one or more from allowed set"
+      },
+      "severity": "warning",
+      "on_fail_hint": "finding_labels contains unexpected values; verify against NIH ChestX-ray14 classification set"
     },
     {
-      "rule_id": "NIH-009",
-      "name": "image_view_position_labeled",
-      "description": "Image should have view position (PA, AP, lateral)",
-      "severity": "warn",
-      "condition": "View position tag missing or 'Unknown'",
-      "rationale": "View position affects image interpretation",
-      "action_on_failure": "Warn; proceed without view position",
-      "applies_to": ["nih_xray/**/*.dcm", "nih_xray/**/*.png"]
+      "rule_id": "nih_007",
+      "field": "patient_age",
+      "check": "range_check",
+      "params": {
+        "min": 0,
+        "max": 110,
+        "allow_null": true
+      },
+      "severity": "warning",
+      "on_fail_hint": "patient_age outside range 0-110; verify metadata quality"
     },
     {
-      "rule_id": "NIH-010",
-      "name": "multi_label_classification_tolerance",
-      "description": "Images may have multiple pathology labels",
-      "severity": "warn",
-      "condition": "Image has >1 pathology label",
-      "rationale": "Real-world chest X-rays often show multiple findings",
-      "action_on_failure": "Accept multi-label; flag for multi_pathology=1",
-      "applies_to": ["nih_xray/labels.csv"]
+      "rule_id": "nih_008",
+      "field": "patient_gender",
+      "check": "enum_check",
+      "params": {
+        "allowed_values": ["M", "F", "O", "U"],
+        "allow_null": true,
+        "note": "M=male, F=female, O=other, U=unknown"
+      },
+      "severity": "warning",
+      "on_fail_hint": "patient_gender should be M|F|O|U or null; standardize gender coding"
+    },
+    {
+      "rule_id": "nih_009",
+      "field": "view_position",
+      "check": "enum_check",
+      "params": {
+        "allowed_values": ["PA", "AP", "LATERAL", "LL", "RL"],
+        "allow_null": true,
+        "note": "PA=posterior-anterior, AP=anterior-posterior, LL=left lateral, RL=right lateral"
+      },
+      "severity": "info",
+      "on_fail_hint": "view_position should be standard X-ray view code; verify imaging metadata"
+    },
+    {
+      "rule_id": "nih_010",
+      "field": "image_width",
+      "check": "range_check",
+      "params": {
+        "min": 500,
+        "max": 5000,
+        "allow_null": true,
+        "unit": "pixels"
+      },
+      "severity": "warning",
+      "on_fail_hint": "image_width outside typical X-ray dimensions 500-5000 pixels; verify image metadata"
+    },
+    {
+      "rule_id": "nih_011",
+      "field": "image_height",
+      "check": "range_check",
+      "params": {
+        "min": 500,
+        "max": 5000,
+        "allow_null": true,
+        "unit": "pixels"
+      },
+      "severity": "warning",
+      "on_fail_hint": "image_height outside typical X-ray dimensions 500-5000 pixels; verify image metadata"
+    },
+    {
+      "rule_id": "nih_012",
+      "field": "acquisition_date",
+      "check": "dtype_enforcement",
+      "params": {
+        "dtype": "datetime64[ns]",
+        "nullable": true,
+        "note": "Often missing in NIH dataset"
+      },
+      "severity": "info",
+      "on_fail_hint": "Convert acquisition_date to datetime; null values are expected"
+    },
+    {
+      "rule_id": "nih_013",
+      "field": "acquisition_date",
+      "check": "range_check",
+      "params": {
+        "min": "1990-01-01",
+        "max": "2025-12-31",
+        "allow_null": true
+      },
+      "severity": "warning",
+      "on_fail_hint": "acquisition_date outside reasonable range; NIH dataset spans multiple decades"
+    },
+    {
+      "rule_id": "nih_014",
+      "field": "state",
+      "check": "dtype_enforcement",
+      "params": {
+        "dtype": "string",
+        "nullable": true,
+        "note": "EXPECTED to be null for most/all records"
+      },
+      "severity": "info",
+      "on_fail_hint": "state field is rarely available in NIH dataset; null is expected"
+    },
+    {
+      "rule_id": "nih_015",
+      "field": "state",
+      "check": "null_percentage",
+      "params": {
+        "expected_null_percentage": 80,
+        "threshold": 100,
+        "note": "80-100% null expected"
+      },
+      "severity": "info",
+      "on_fail_hint": "Most NIH records lack state information; high null percentage is expected"
+    },
+    {
+      "rule_id": "nih_016",
+      "field": "state_abbr",
+      "check": "consistency_check",
+      "params": {
+        "rule": "if state is null then state_abbr == 'UNKNOWN' and ambiguous_geo == True"
+      },
+      "severity": "error",
+      "on_fail_hint": "When state is null, state_abbr should be 'UNKNOWN' with ambiguous_geo=True"
+    },
+    {
+      "rule_id": "nih_017",
+      "field": "period_id",
+      "check": "consistency_check",
+      "params": {
+        "rule": "if acquisition_date is null then period_id == 'UNKNOWN' and low_precision_time == True"
+      },
+      "severity": "error",
+      "on_fail_hint": "When acquisition_date is null, period_id should be 'UNKNOWN' with low_precision_time=True"
+    },
+    {
+      "rule_id": "nih_018",
+      "field": "period_id",
+      "check": "consistency_check",
+      "params": {
+        "rule": "if acquisition_date is not null then period_id == acquisition_date.strftime('%Y%m')"
+      },
+      "severity": "error",
+      "on_fail_hint": "When acquisition_date available, period_id should be YYYYMM format; verify derivation"
+    },
+    {
+      "rule_id": "nih_019",
+      "field": "nih_geo_limited",
+      "check": "value_check",
+      "params": {
+        "expected_value": true,
+        "reason": "All NIH records should have this flag set"
+      },
+      "severity": "error",
+      "on_fail_hint": "nih_geo_limited must be True for all NIH image metadata; flag is source-specific"
+    },
+    {
+      "rule_id": "nih_020",
+      "field": "ambiguous_geo",
+      "check": "value_check",
+      "params": {
+        "expected_value": true,
+        "expected_percentage": 80,
+        "note": "Most records will have ambiguous_geo=True due to missing state"
+      },
+      "severity": "info",
+      "on_fail_hint": "Most NIH records should have ambiguous_geo=True; only those with explicit state should be False"
+    },
+    {
+      "rule_id": "nih_021",
+      "field": "low_precision_time",
+      "check": "value_check",
+      "params": {
+        "expected_percentage": 50,
+        "note": "Many records may lack acquisition_date"
+      },
+      "severity": "info",
+      "on_fail_hint": "Significant portion of NIH records may have low_precision_time=True due to missing dates"
+    },
+    {
+      "rule_id": "nih_022",
+      "field": "*",
+      "check": "aggregation_impact",
+      "params": {
+        "rule": "if state_abbr == 'UNKNOWN' then nih_cxr_images should be set to 0 in final aggregation"
+      },
+      "severity": "warning",
+      "on_fail_hint": "Records with unknown geography should not contribute to state-level aggregation; set count to 0"
+    },
+    {
+      "rule_id": "nih_023",
+      "field": "patient_id",
+      "check": "drop_check",
+      "params": {
+        "should_drop": true,
+        "reason": "Potential PHI even if de-identified; not needed for analysis",
+        "after_transform": true
+      },
+      "severity": "warning",
+      "on_fail_hint": "patient_id should be dropped if present; retain only image_id"
     }
   ],
-  
-  "flag_definitions": {
-    "nih_geo_limited": {
-      "triggered_by": ["NIH-007"],
-      "description": "NIH imaging data lacks state-level geography",
-      "impact": "Excluded from Virginia cohort joins; available for image processing only"
+  "expected_data_characteristics": {
+    "missing_geography": {
+      "percentage": "80-100%",
+      "severity": "expected",
+      "note": "NIH ChestX-ray14 dataset does not include patient location data"
     },
-    "low_precision_time": {
-      "triggered_by": ["NIH-008"],
-      "description": "Study date missing; using file metadata date",
-      "impact": "Reduced temporal precision for time-series analysis"
+    "missing_acquisition_date": {
+      "percentage": "30-80%",
+      "severity": "expected",
+      "note": "Acquisition dates are sparsely populated in NIH dataset"
     },
-    "low_confidence_label": {
-      "triggered_by": ["NIH-005"],
-      "description": "NLP-derived label has <85% confidence",
-      "impact": "May be excluded from clinical accuracy analyses"
+    "finding_distribution": {
+      "no_finding": "~60%",
+      "single_finding": "~25%",
+      "multiple_findings": "~15%",
+      "note": "Most images have 'No Finding' label"
     },
-    "multi_pathology": {
-      "triggered_by": ["NIH-010"],
-      "description": "Image shows multiple pathology findings",
-      "impact": "Requires multi-label classification approach"
+    "view_position_distribution": {
+      "PA": "~70%",
+      "AP": "~25%",
+      "LATERAL": "~5%",
+      "note": "PA (posterior-anterior) is most common view"
     }
   },
-  
-  "nih_specific_assumptions": {
-    "dataset_name": "NIH Chest X-ray14 / ChestX-ray14",
-    "total_images": "112,120 frontal-view X-ray images",
-    "pathology_labels": [
-      "Atelectasis",
-      "Cardiomegaly",
-      "Effusion",
-      "Infiltration",
-      "Mass",
-      "Nodule",
-      "Pneumonia",
-      "Pneumothorax",
-      "Consolidation",
-      "Edema",
-      "Emphysema",
-      "Fibrosis",
-      "Pleural_Thickening",
-      "Hernia",
-      "No Finding"
-    ],
-    "image_format": "PNG (converted from DICOM)",
-    "image_size": "~1024x1024 pixels, 8-bit grayscale",
-    "file_sizes": "Typically 50-200KB per PNG",
-    "temporal_coverage": "1992-2015",
-    "source_institution": "NIH Clinical Center",
-    "label_derivation": "NLP from radiology reports (ChestX-ray14 paper, Wang et al., 2017)"
+  "aggregation_rules": {
+    "nih_cxr_images_count": {
+      "rule": "count only records where state_abbr != 'UNKNOWN'",
+      "expected_count_per_state": "likely 0 for VA (no geographic data)",
+      "fallback": "set to 0 if ambiguous_geo == True"
+    }
   },
-  
-  "current_implementation_status": {
-    "pipeline_integration": "NOT IMPLEMENTED",
-    "reason": "Missing state-level geography prevents Virginia cohort join",
-    "future_work": "Could be used for image processing pipeline benchmarks (latency for DICOM parsing, PNG compression)",
-    "geographic_limitation_documented": "docs/data_sources.md Limitations section"
-  },
-  
-  "validation_pass_criteria": {
-    "v1_strict": "All metadata present; labels validated; geographic data required",
-    "v2_relaxed": "Image readable + patient ID anonymized + nih_geo_limited=1 flag accepted"
-  },
-  
-  "cross_references": {
-    "nih_dataset": "https://www.kaggle.com/datasets/nih-chest-xrays/data",
-    "original_paper": "Wang et al. (2017). ChestX-ray8: Hospital-scale Chest X-ray Database",
-    "dicom_standard": "https://www.dicomstandard.org/",
-    "validation_policy": "docs/methods_validation_policy.md",
-    "data_dictionary": "data/raw/nih_xray/README.md"
+  "data_quality_notes": [
+    {
+      "note": "NIH ChestX-ray14 dataset is intended for computer vision research, not epidemiology",
+      "severity": "critical"
+    },
+    {
+      "note": "Geographic information is NOT available in standard NIH dataset; all records will have nih_geo_limited flag",
+      "severity": "critical"
+    },
+    {
+      "note": "Temporal information is sparse; many records will have low_precision_time flag",
+      "severity": "warning"
+    },
+    {
+      "note": "Image metadata is de-identified; patient_id (if present) is anonymized",
+      "severity": "info"
+    },
+    {
+      "note": "Finding labels are algorithmically extracted from radiology reports via NLP; may have labeling errors",
+      "severity": "info"
+    }
+  ],
+  "schema_variant": {
+    "nih_cxr_metadata": {
+      "required_fields": ["image_id", "finding_labels"],
+      "optional_fields": [
+        "patient_id", "patient_age", "patient_gender", "view_position",
+        "image_width", "image_height", "acquisition_date", "state"
+      ],
+      "expected_null_fields": ["state", "acquisition_date"],
+      "image_dimensions": "typically 1024x1024 or similar"
+    }
   }
 }

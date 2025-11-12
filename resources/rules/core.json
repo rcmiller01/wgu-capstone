@@ -1,153 +1,302 @@
 {
-  "rule_pack_name": "core_validation_rules",
-  "version": "2.0_relaxed",
-  "description": "Core validation rules applied to all data sources (FHIR, CSV, XPT)",
-  "severity_policy": "error_if_metric_uncomputable",
-  "created_date": "2025-11-11",
-  
+  "rule_set": "core",
+  "version": "1.0.0",
+  "description": "Core validation rules applicable to all data sources after cleaning and transformation",
+  "applies_to": ["synthea", "vdh", "nhanes", "nih"],
   "rules": [
     {
-      "rule_id": "CORE-001",
-      "name": "resource_type_present",
-      "description": "Resource must have a type identifier",
+      "rule_id": "core_001",
+      "field": "state_abbr",
+      "check": "schema_presence",
+      "params": {
+        "required": true
+      },
       "severity": "error",
-      "condition": "resourceType field is NULL or empty",
-      "rationale": "Cannot parse file without knowing resource structure",
-      "action_on_failure": "Fail file",
-      "applies_to": ["FHIR"]
+      "on_fail_hint": "state_abbr is a required key field; ensure geographic derivation logic executed"
     },
     {
-      "rule_id": "CORE-002",
-      "name": "resource_id_present",
-      "description": "Resource must have a unique identifier",
+      "rule_id": "core_002",
+      "field": "state_abbr",
+      "check": "dtype_enforcement",
+      "params": {
+        "dtype": "category",
+        "nullable": false
+      },
       "severity": "error",
-      "condition": "id field is NULL or empty",
-      "rationale": "Cannot track records or detect duplicates without ID",
-      "action_on_failure": "Fail file",
-      "applies_to": ["FHIR"]
+      "on_fail_hint": "Convert state_abbr to pandas categorical dtype"
     },
     {
-      "rule_id": "CORE-003",
-      "name": "temporal_field_derivable",
-      "description": "At least one temporal field must exist to derive period_id",
+      "rule_id": "core_003",
+      "field": "state_abbr",
+      "check": "enum_check",
+      "params": {
+        "allowed_values": [
+          "VA", "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+          "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA",
+          "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY",
+          "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX",
+          "UT", "VT", "WA", "WV", "WI", "WY", "DC", "UNKNOWN"
+        ]
+      },
       "severity": "error",
-      "condition": "ALL of (period.start, period.end, actualPeriod.start) are NULL",
-      "rationale": "Cannot assign processing month for time-series analysis",
-      "action_on_failure": "Fail file",
-      "applies_to": ["FHIR"],
-      "v1_strict": "Requires both period.start AND period.end",
-      "v2_relaxed": "Requires at least ONE temporal field"
+      "on_fail_hint": "state_abbr must be valid 2-letter US state code or 'UNKNOWN'; check geographic derivation logic"
     },
     {
-      "rule_id": "CORE-004",
-      "name": "temporal_precision_flag",
-      "description": "Flag records with single temporal field",
-      "severity": "warn",
-      "condition": "Only one of (period.start, period.end) present",
-      "rationale": "Reduced temporal precision may affect month assignment accuracy",
-      "action_on_failure": "Set low_precision_time=1; file passes",
-      "applies_to": ["FHIR"],
-      "v2_relaxed_only": true
-    },
-    {
-      "rule_id": "CORE-005",
-      "name": "date_format_valid",
-      "description": "Date fields must parse to valid ISO 8601",
+      "rule_id": "core_004",
+      "field": "period_id",
+      "check": "schema_presence",
+      "params": {
+        "required": true
+      },
       "severity": "error",
-      "condition": "Date field present but does not match YYYY-MM-DD[THH:MM:SS[.sss][Z]]",
-      "rationale": "Cannot extract month or perform temporal calculations",
-      "action_on_failure": "Drop row if <5% affected; fail file if >=5%",
-      "applies_to": ["FHIR", "CSV"],
-      "error_tolerance": "5% row-level failures allowed"
+      "on_fail_hint": "period_id is a required key field; ensure temporal derivation logic executed"
     },
     {
-      "rule_id": "CORE-006",
-      "name": "dtype_coercion_tolerance",
-      "description": "Allow sentinel values to be normalized before dtype casting",
-      "severity": "warn",
-      "condition": "Value in ('UNK', 'Unknown', 'NA', 'N/A', '9999-99-99')",
-      "rationale": "Common missing value indicators should be converted to NULL",
-      "action_on_failure": "Convert to NULL; proceed",
-      "applies_to": ["CSV", "XPT"],
-      "preprocessing": "Apply before validation"
-    },
-    {
-      "rule_id": "CORE-007",
-      "name": "row_level_failure_threshold",
-      "description": "File passes if <5% of metric-critical rows fail validation",
+      "rule_id": "core_005",
+      "field": "period_id",
+      "check": "dtype_enforcement",
+      "params": {
+        "dtype": "string",
+        "nullable": false
+      },
       "severity": "error",
-      "condition": "Metric-critical row failures >= 5% of total rows",
-      "rationale": "Systematic data quality issues invalidate file",
-      "action_on_failure": "Fail file",
-      "applies_to": ["FHIR", "CSV", "XPT"],
-      "metric_critical_fields": ["latency_sec", "validation_passed", "file_size_kb"]
+      "on_fail_hint": "Convert period_id to string dtype in YYYYMM format"
     },
     {
-      "rule_id": "CORE-008",
-      "name": "nullable_dtypes_required",
-      "description": "Use pandas nullable dtypes (Int64, Float64, boolean)",
+      "rule_id": "core_006",
+      "field": "period_id",
+      "check": "regex_pattern",
+      "params": {
+        "pattern": "^\\d{6}$|^UNKNOWN$",
+        "description": "YYYYMM format (6 digits) or 'UNKNOWN'"
+      },
       "severity": "error",
-      "condition": "Dtype cast fails due to NA in non-nullable int64/float64/bool",
-      "rationale": "Legitimate missingness should not cause dtype errors",
-      "action_on_failure": "Convert to nullable dtype; proceed",
-      "applies_to": ["CSV", "XPT"],
-      "preprocessing": "Apply before validation"
+      "on_fail_hint": "period_id must be 6-digit YYYYMM string or 'UNKNOWN'; check date truncation logic"
     },
     {
-      "rule_id": "CORE-009",
-      "name": "file_size_measurable",
-      "description": "File size must be > 0 bytes",
-      "severity": "error",
-      "condition": "File size = 0 bytes",
-      "rationale": "Empty files cannot produce metrics",
-      "action_on_failure": "Fail file",
-      "applies_to": ["FHIR", "CSV", "XPT", "DICOM"]
+      "rule_id": "core_007",
+      "field": "period_id",
+      "check": "date_bounds",
+      "params": {
+        "min_date": "201501",
+        "max_date": "202512",
+        "allow_unknown": true
+      },
+      "severity": "warning",
+      "on_fail_hint": "period_id outside expected range 2015-2025; verify data source time bounds"
     },
     {
-      "rule_id": "CORE-010",
-      "name": "latency_non_negative",
-      "description": "Processing latency must be >= 0 seconds",
+      "rule_id": "core_008",
+      "field": "source_id",
+      "check": "schema_presence",
+      "params": {
+        "required": true
+      },
       "severity": "error",
-      "condition": "latency_sec < 0",
-      "rationale": "Negative latency indicates timestamp calculation error",
-      "action_on_failure": "Fail file (system error, not data quality issue)",
-      "applies_to": ["ALL"]
+      "on_fail_hint": "source_id is required; must be set during ETL"
+    },
+    {
+      "rule_id": "core_009",
+      "field": "source_id",
+      "check": "dtype_enforcement",
+      "params": {
+        "dtype": "category",
+        "nullable": false
+      },
+      "severity": "error",
+      "on_fail_hint": "Convert source_id to pandas categorical dtype"
+    },
+    {
+      "rule_id": "core_010",
+      "field": "source_id",
+      "check": "enum_check",
+      "params": {
+        "allowed_values": ["CSV", "FHIR", "HL7", "IMG_META"]
+      },
+      "severity": "error",
+      "on_fail_hint": "source_id must be CSV|FHIR|HL7|IMG_META; check source mapping in join_spec.json"
+    },
+    {
+      "rule_id": "core_011",
+      "field": "schema_variant",
+      "check": "schema_presence",
+      "params": {
+        "required": true
+      },
+      "severity": "error",
+      "on_fail_hint": "schema_variant is required; must be set to source-specific tag"
+    },
+    {
+      "rule_id": "core_012",
+      "field": "schema_variant",
+      "check": "dtype_enforcement",
+      "params": {
+        "dtype": "category",
+        "nullable": false
+      },
+      "severity": "error",
+      "on_fail_hint": "Convert schema_variant to pandas categorical dtype"
+    },
+    {
+      "rule_id": "core_013",
+      "field": "low_precision_time",
+      "check": "schema_presence",
+      "params": {
+        "required": true
+      },
+      "severity": "error",
+      "on_fail_hint": "low_precision_time flag must be present; set to True if only year available, else False"
+    },
+    {
+      "rule_id": "core_014",
+      "field": "low_precision_time",
+      "check": "dtype_enforcement",
+      "params": {
+        "dtype": "boolean",
+        "nullable": false
+      },
+      "severity": "error",
+      "on_fail_hint": "Convert low_precision_time to boolean dtype"
+    },
+    {
+      "rule_id": "core_015",
+      "field": "ambiguous_geo",
+      "check": "schema_presence",
+      "params": {
+        "required": true
+      },
+      "severity": "error",
+      "on_fail_hint": "ambiguous_geo flag must be present; set to True if state not confidently resolved, else False"
+    },
+    {
+      "rule_id": "core_016",
+      "field": "ambiguous_geo",
+      "check": "dtype_enforcement",
+      "params": {
+        "dtype": "boolean",
+        "nullable": false
+      },
+      "severity": "error",
+      "on_fail_hint": "Convert ambiguous_geo to boolean dtype"
+    },
+    {
+      "rule_id": "core_017",
+      "field": "nih_geo_limited",
+      "check": "schema_presence",
+      "params": {
+        "required": true
+      },
+      "severity": "warning",
+      "on_fail_hint": "nih_geo_limited flag should be present; set to True for NIH data, False otherwise"
+    },
+    {
+      "rule_id": "core_018",
+      "field": "nih_geo_limited",
+      "check": "dtype_enforcement",
+      "params": {
+        "dtype": "boolean",
+        "nullable": false
+      },
+      "severity": "warning",
+      "on_fail_hint": "Convert nih_geo_limited to boolean dtype"
+    },
+    {
+      "rule_id": "core_019",
+      "field": "*",
+      "check": "consistency_check",
+      "params": {
+        "rule": "if state_abbr == 'UNKNOWN' then ambiguous_geo must be True"
+      },
+      "severity": "warning",
+      "on_fail_hint": "When state cannot be determined, both state_abbr='UNKNOWN' and ambiguous_geo=True should be set"
+    },
+    {
+      "rule_id": "core_020",
+      "field": "*",
+      "check": "consistency_check",
+      "params": {
+        "rule": "if period_id == 'UNKNOWN' then low_precision_time must be True"
+      },
+      "severity": "warning",
+      "on_fail_hint": "When temporal data is unavailable, both period_id='UNKNOWN' and low_precision_time=True should be set"
+    },
+    {
+      "rule_id": "core_021",
+      "field": "*",
+      "check": "consistency_check",
+      "params": {
+        "rule": "if source_id == 'IMG_META' then nih_geo_limited should be True"
+      },
+      "severity": "info",
+      "on_fail_hint": "NIH image metadata (IMG_META) typically lacks geography; nih_geo_limited should be True"
+    },
+    {
+      "rule_id": "core_022",
+      "field": "period_id",
+      "check": "date_logic_check",
+      "params": {
+        "rule": "YYYY portion must be <= current_year + 1"
+      },
+      "severity": "warning",
+      "on_fail_hint": "Future dates detected; verify data source time range or check for data entry errors"
+    },
+    {
+      "rule_id": "core_023",
+      "field": "period_id",
+      "check": "date_logic_check",
+      "params": {
+        "rule": "MM portion must be 01-12"
+      },
+      "severity": "error",
+      "on_fail_hint": "Invalid month in period_id; must be 01-12"
     }
   ],
-  
-  "flag_definitions": {
-    "low_precision_time": {
-      "triggered_by": ["CORE-004"],
-      "description": "Only one temporal field present",
-      "impact": "Excluded from month-stratified sensitivity analysis",
-      "default_value": 0
+  "flag_consistency_rules": [
+    {
+      "rule_id": "flag_001",
+      "description": "Validate flag combinations",
+      "checks": [
+        {
+          "condition": "state_abbr == 'VA' and ambiguous_geo == True",
+          "severity": "warning",
+          "message": "VA state with ambiguous_geo=True is contradictory; review derivation"
+        },
+        {
+          "condition": "source_id == 'FHIR' and nih_geo_limited == True",
+          "severity": "warning",
+          "message": "FHIR data (Synthea) should not have nih_geo_limited flag; this is NIH-specific"
+        },
+        {
+          "condition": "low_precision_time == False and period_id matches ^\\d{4}01$",
+          "severity": "info",
+          "message": "Period ending in 01 may indicate year-only data; verify low_precision_time flag"
+        }
+      ]
     }
-  },
-  
-  "severity_mappings": {
-    "error": {
-      "action": "Fail file immediately",
-      "contributes_to_validation_pass_rate": false
+  ],
+  "post_aggregation_rules": [
+    {
+      "rule_id": "agg_001",
+      "field": "state_abbr",
+      "check": "grain_validation",
+      "params": {
+        "grain": ["state_abbr", "period_id"],
+        "allow_duplicates": false
+      },
+      "severity": "error",
+      "on_fail_hint": "Duplicate state_abbr × period_id combinations detected; aggregation failed"
     },
-    "warn": {
-      "action": "Flag + proceed",
-      "contributes_to_validation_pass_rate": true
+    {
+      "rule_id": "agg_002",
+      "field": "*",
+      "check": "completeness_check",
+      "params": {
+        "expected_state_count": 1,
+        "expected_state": "VA",
+        "min_periods": 12
+      },
+      "severity": "warning",
+      "on_fail_hint": "Expected at least 12 monthly periods for VA; check data coverage"
     }
-  },
-  
-  "validation_workflow": {
-    "step_1": "Apply preprocessing (CORE-006, CORE-008)",
-    "step_2": "Check file-level rules (CORE-001, CORE-002, CORE-009)",
-    "step_3": "Check row-level rules (CORE-003, CORE-005)",
-    "step_4": "Apply row-level failure threshold (CORE-007)",
-    "step_5": "Set flags for warnings (CORE-004)",
-    "step_6": "Calculate validation_passed = (no errors OR <5% row failures)",
-    "step_7": "Log results and proceed to metric calculation"
-  },
-  
-  "cross_references": {
-    "validation_policy": "docs/methods_validation_policy.md",
-    "metrics_spec": "docs/metrics_spec.md",
-    "data_dictionary": "docs/data_dictionary_cohort_va.md"
-  }
+  ]
 }

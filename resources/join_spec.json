@@ -1,245 +1,289 @@
 {
-  "specification_version": "1.0",
+  "target_grain": "state_month_va",
+  "description": "Join specification for multi-source healthcare data integration to Virginia state-month grain",
+  "version": "1.0.0",
   "created_date": "2025-11-11",
-  "project": "Serverless FHIR Data Pipeline Performance Study",
-  "purpose": "Define join keys and schema for cohort fact table aggregation",
-  
-  "join_table": {
-    "name": "cohort_fact_va",
-    "description": "Aggregated performance metrics by data source for Virginia cohort",
-    "grain": "One row per data source (nhanes, synthea, vdh, plus ALL aggregate)",
-    "primary_key": ["data_source"]
+  "keys": [
+    {
+      "name": "state_abbr",
+      "dtype": "category",
+      "derivation": "map from raw geography; force 'VA' for VDH; for Synthea use patient location→state; for NHANES mark 'VA' as a PRIOR/WEIGHTED proxy"
+    },
+    {
+      "name": "period_id",
+      "dtype": "string(YYYYMM)",
+      "derivation": "truncate encounter/observation/report date to month; if only year present, map to YYYY01 and mark 'low_precision_time' flag"
+    },
+    {
+      "name": "source_id",
+      "dtype": "category",
+      "derivation": "one of CSV|FHIR|HL7|IMG_META",
+      "allowed_values": ["CSV", "FHIR", "HL7", "IMG_META"]
+    },
+    {
+      "name": "schema_variant",
+      "dtype": "category",
+      "derivation": "source-specific schema tag",
+      "examples": ["nhanes_demo_j", "nhanes_bmx_k", "vdh_hoi", "vdh_wic", "synthea_patient", "synthea_encounter", "nih_cxr_metadata"]
+    }
+  ],
+  "synthetic_patient_key": {
+    "name": "customer_id",
+    "applies_to": ["synthea"],
+    "method": "HMAC_SHA256",
+    "secret_location": "ENV:CAPSTONE_HMAC_SALT (not committed)",
+    "input_fields": ["patient_id OR synthea internal id"],
+    "reversible": false,
+    "notes": "Hash synthetic patient IDs to create anonymized customer_id for analysis; HMAC salt must be stored securely in environment variable"
   },
-  
-  "join_keys": {
-    "data_source": {
-      "description": "Data source identifier for stratified analysis",
-      "type": "string",
-      "cardinality": "categorical",
-      "valid_values": ["nhanes", "synthea", "vdh", "ALL"],
-      "source_mapping": {
-        "nhanes": "Files from data/raw/nhanes/*.XPT",
-        "synthea": "Files from data/raw/synthea/fhir/*.json",
-        "vdh": "Files from data/raw/vdh/*.csv"
-      },
-      "join_logic": "GROUP BY data_source"
+  "dimensions": {
+    "GeoDim": {
+      "fields": ["state_abbr"],
+      "extras": ["state_fips?", "rurality_code?"],
+      "description": "Geographic dimension at state level; Virginia-focused with optional FIPS and rural/urban classification"
     },
-    
-    "period_id": {
-      "description": "Month identifier derived from temporal fields (YYYY-MM format)",
-      "type": "string",
-      "pattern": "^\\d{4}-\\d{2}$",
-      "derivation_rules": [
-        {
-          "priority": 1,
-          "condition": "Encounter.period.start exists",
-          "extraction": "DATE_FORMAT(Encounter.period.start, '%Y-%m')",
-          "flag": "low_precision_time=0"
-        },
-        {
-          "priority": 2,
-          "condition": "Encounter.period.end exists (no start)",
-          "extraction": "DATE_FORMAT(Encounter.period.end, '%Y-%m')",
-          "flag": "low_precision_time=1"
-        },
-        {
-          "priority": 3,
-          "condition": "Encounter.actualPeriod.start exists",
-          "extraction": "DATE_FORMAT(Encounter.actualPeriod.start, '%Y-%m')",
-          "flag": "low_precision_time=1"
-        },
-        {
-          "priority": 4,
-          "condition": "No temporal field",
-          "extraction": "NULL",
-          "validation_result": "FAIL"
-        }
-      ],
-      "join_logic": "Used for temporal stratification (optional in cohort_fact_va)",
-      "current_implementation": "Not aggregated in cohort_fact_va (file-level only)"
+    "DateDim": {
+      "fields": ["period_id"],
+      "extras": ["date_start", "date_end"],
+      "description": "Temporal dimension at monthly grain; period_id in YYYYMM format with optional start/end bounds"
     },
-    
-    "state_abbr": {
-      "description": "Two-letter state abbreviation for geographic stratification",
-      "type": "string",
-      "pattern": "^[A-Z]{2}$",
-      "valid_values": ["VA", "NULL"],
-      "derivation_rules": [
-        {
-          "priority": 1,
-          "condition": "Patient.address.state = 'VA'",
-          "extraction": "'VA'",
-          "flag": "ambiguous_geo=0"
-        },
-        {
-          "priority": 2,
-          "condition": "Patient.address.city IN (VA_cities_list)",
-          "extraction": "'VA' (inferred from city)",
-          "flag": "ambiguous_geo=1"
-        },
-        {
-          "priority": 3,
-          "condition": "State missing or unknown",
-          "extraction": "NULL",
-          "flag": "ambiguous_geo=1"
-        }
-      ],
-      "join_logic": "Used for VA-specific geographic filtering (optional)",
-      "current_implementation": "Not aggregated in cohort_fact_va (file-level only)"
-    },
-    
-    "source_id": {
-      "description": "Unique identifier for source file (combination of source + filename)",
-      "type": "string",
-      "derivation": "CONCAT(data_source, ':', file_name)",
-      "uniqueness": "Unique per file processed",
-      "join_logic": "Row-level identifier in processed data; not used in cohort aggregation"
-    },
-    
-    "schema_variant": {
-      "description": "Schema version or variant within data source",
-      "type": "string",
-      "cardinality": "categorical",
-      "examples": {
-        "nhanes": ["2017-2018", "2019-2020"],
-        "synthea": ["fhir_r4"],
-        "vdh": ["health_opportunity_index", "wic_participation"]
-      },
-      "join_logic": "Used for stratified analysis within data sources (not in current cohort_fact_va)"
+    "SourceDim": {
+      "fields": ["source_id", "schema_variant"],
+      "description": "Data source and schema tracking dimension"
     }
   },
-  
-  "synthetic_keys_and_flags": {
-    "customer_id": {
-      "description": "One-way HMAC hash of Patient.id for privacy-preserving linkage",
-      "type": "string",
-      "algorithm": "HMAC-SHA256",
-      "key_source": "Environment variable PATIENT_ID_HMAC_KEY",
-      "formula": "HMAC-SHA256(Patient.id, secret_key)",
-      "purpose": "Enable cross-file patient linkage without storing PHI",
-      "current_implementation": "Not implemented (Synthea patients not linked across files)"
+  "cohort_fact_columns": [
+    {
+      "name": "synthea_encounters",
+      "agg": "count",
+      "from": "synthea",
+      "where": "state_abbr='VA'",
+      "group_by": ["state_abbr", "period_id"],
+      "description": "Count of synthetic patient encounters in Virginia by month"
     },
-    
-    "low_precision_time": {
-      "description": "Flag indicating temporal field has reduced precision",
-      "type": "boolean",
-      "values": {
-        "0": "Both period.start and period.end present",
-        "1": "Only one temporal field available, or inferred from alternate field"
-      },
-      "impact": "Records with low_precision_time=1 excluded from month-stratified analyses"
+    {
+      "name": "synthea_dx_rate",
+      "agg": "count_per_1000",
+      "from": "synthea",
+      "note": "diagnosis codes per 1k patients",
+      "description": "Rate of diagnoses per 1,000 synthetic patients"
     },
-    
-    "ambiguous_geo": {
-      "description": "Flag indicating geographic field inferred or missing",
-      "type": "boolean",
-      "values": {
-        "0": "Patient.address.state explicitly present",
-        "1": "State inferred from city, or no geography available"
-      },
-      "impact": "Records with ambiguous_geo=1 excluded from VA-specific geographic analyses"
+    {
+      "name": "synthea_lab_oob_rate",
+      "agg": "percent",
+      "from": "synthea",
+      "description": "Percentage of laboratory observations out-of-bounds (abnormal results)"
     },
-    
-    "lab_oob_na": {
-      "description": "Flag indicating lab observation has no reference range",
-      "type": "boolean",
-      "values": {
-        "0": "Observation.referenceRange present",
-        "1": "No reference range (non-lab vital or missing)"
-      },
-      "impact": "Records with lab_oob_na=1 excluded from lab_oob_rate numerator/denominator"
+    {
+      "name": "vdh_case_rate",
+      "agg": "per_100k",
+      "from": "vdh",
+      "description": "Virginia Department of Health case rate per 100,000 population"
     },
-    
-    "nih_geo_limited": {
-      "description": "Flag indicating NIH imaging data lacks state-level geography",
-      "type": "boolean",
-      "values": {
-        "0": "State-level geography available",
-        "1": "NIH Chest X-ray dataset (no state metadata)"
-      },
-      "impact": "Records with nih_geo_limited=1 excluded from VA join",
-      "current_implementation": "Not used (NIH images not processed in current pipeline)"
+    {
+      "name": "vdh_hosp_rate",
+      "agg": "per_100k",
+      "from": "vdh",
+      "description": "Virginia hospitalization rate per 100,000 population"
+    },
+    {
+      "name": "nhanes_obesity_rate",
+      "agg": "prior_weighted_to_VA",
+      "from": "nhanes",
+      "description": "NHANES obesity prevalence weighted and projected to Virginia population"
+    },
+    {
+      "name": "nhanes_smoking_rate",
+      "agg": "prior_weighted_to_VA",
+      "from": "nhanes",
+      "description": "NHANES smoking prevalence weighted and projected to Virginia population"
+    },
+    {
+      "name": "nih_cxr_images",
+      "agg": "count",
+      "from": "nih",
+      "note": "only if state available; else set 0 and add 'nih_geo_limited' flag",
+      "description": "Count of NIH chest X-ray images; geographic limitation applies"
+    }
+  ],
+  "validation_flags": [
+    {
+      "name": "low_precision_time",
+      "description": "Set when period derived only from year (mapped to YYYY01)",
+      "applies_to": ["all sources"],
+      "severity": "warning"
+    },
+    {
+      "name": "ambiguous_geo",
+      "description": "Set when state could not be resolved confidently",
+      "applies_to": ["all sources"],
+      "severity": "warning"
+    },
+    {
+      "name": "nih_geo_limited",
+      "description": "Set when NIH rows lack state mapping; nih_cxr_images forced to 0",
+      "applies_to": ["nih"],
+      "severity": "info"
+    }
+  ],
+  "source_mappings": {
+    "nhanes": {
+      "file_pattern": "data/raw/nhanes/**/*.XPT",
+      "source_id": "CSV",
+      "schema_variants": [
+        "nhanes_demo_j",
+        "nhanes_demo_k",
+        "nhanes_bmx_j",
+        "nhanes_bmx_k",
+        "nhanes_tchol_j",
+        "nhanes_tchol_k",
+        "nhanes_bpq_j",
+        "nhanes_bpq_k"
+      ],
+      "state_derivation": "No geographic data at state level; use survey weights to project national data to VA population (PRIOR/WEIGHTED proxy)",
+      "period_derivation": "Extract from SDDSRVYR (10=2017-2018→201701, 11=2019-2020→201901) with low_precision_time flag",
+      "key_field": "SEQN",
+      "date_fields": [],
+      "geo_fields": []
+    },
+    "vdh": {
+      "file_pattern": "data/raw/vdh/*.csv",
+      "source_id": "CSV",
+      "schema_variants": ["vdh_hoi", "vdh_wic"],
+      "state_derivation": "Force 'VA' (all records are Virginia localities)",
+      "period_derivation": "Extract from 'year' and optional 'month' columns; if month missing, use YYYY01 with low_precision_time flag",
+      "key_field": "fips_code",
+      "date_fields": ["year", "month"],
+      "geo_fields": ["locality", "fips_code", "state_abbr"]
+    },
+    "synthea": {
+      "file_pattern": "data/raw/synthea/*.json",
+      "source_id": "FHIR",
+      "schema_variants": [
+        "synthea_patient",
+        "synthea_encounter",
+        "synthea_condition",
+        "synthea_observation",
+        "synthea_medication",
+        "synthea_procedure",
+        "synthea_immunization",
+        "synthea_claim"
+      ],
+      "state_derivation": "Extract from Patient.address[0].state; filter for state_abbr='VA' or remap if needed",
+      "period_derivation": "Extract from Encounter.period.start, Observation.effectiveDateTime, etc.; truncate to YYYYMM",
+      "key_field": "Patient.id",
+      "customer_id_transform": "HMAC_SHA256(Patient.id, ENV:CAPSTONE_HMAC_SALT)",
+      "date_fields": [
+        "Patient.birthDate",
+        "Encounter.period.start",
+        "Encounter.period.end",
+        "Observation.effectiveDateTime",
+        "Condition.onsetDateTime",
+        "Procedure.performedPeriod.start",
+        "MedicationRequest.authoredOn",
+        "Immunization.occurrenceDateTime"
+      ],
+      "geo_fields": ["Patient.address[0].city", "Patient.address[0].state", "Patient.address[0].postalCode"]
+    },
+    "nih": {
+      "file_pattern": "data/raw/nih_xray/**/*",
+      "source_id": "IMG_META",
+      "schema_variants": ["nih_cxr_metadata"],
+      "state_derivation": "Extract from metadata if available; if missing, set ambiguous_geo and nih_geo_limited flags",
+      "period_derivation": "Extract from image acquisition date if available; else set low_precision_time flag",
+      "key_field": "image_id",
+      "date_fields": ["acquisition_date"],
+      "geo_fields": [],
+      "notes": "NIH chest X-ray dataset typically lacks geographic identifiers; most rows will have nih_geo_limited flag"
     }
   },
-  
-  "aggregation_logic": {
-    "description": "SQL-like aggregation for cohort_fact_va table",
-    "base_query": "SELECT data_source, COUNT(*) as n_records, AVG(latency_sec) as mean_latency_sec, PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY latency_sec) as p50_latency_sec, PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_sec) as p95_latency_sec, SUM(CAST(validation_passed AS INT)) / COUNT(*) as validation_pass_rate, AVG(file_size_kb) as mean_file_size_kb FROM processed_data GROUP BY data_source",
-    
-    "join_operations": [
+  "transformation_pipeline": [
+    {
+      "step": 1,
+      "name": "extract_raw",
+      "description": "Read raw files from all sources (XPT, CSV, JSON, image metadata)"
+    },
+    {
+      "step": 2,
+      "name": "derive_keys",
+      "description": "Create state_abbr, period_id, source_id, schema_variant for each record"
+    },
+    {
+      "step": 3,
+      "name": "apply_customer_id_hash",
+      "description": "For Synthea only: generate customer_id via HMAC_SHA256(patient_id, CAPSTONE_HMAC_SALT)"
+    },
+    {
+      "step": 4,
+      "name": "set_validation_flags",
+      "description": "Mark records with low_precision_time, ambiguous_geo, nih_geo_limited as appropriate"
+    },
+    {
+      "step": 5,
+      "name": "filter_to_va",
+      "description": "Filter to state_abbr='VA' or apply weighted projection for NHANES"
+    },
+    {
+      "step": 6,
+      "name": "aggregate_to_grain",
+      "description": "Group by [state_abbr, period_id] and compute cohort_fact_columns aggregations"
+    },
+    {
+      "step": 7,
+      "name": "build_dimensions",
+      "description": "Construct GeoDim, DateDim, SourceDim lookup tables"
+    },
+    {
+      "step": 8,
+      "name": "validate_output",
+      "description": "Check for required fields, valid ranges, flag completeness"
+    }
+  ],
+  "output_schema": {
+    "fact_table": {
+      "name": "cohort_facts_va_monthly",
+      "grain": "state_abbr × period_id",
+      "columns": [
+        "state_abbr",
+        "period_id",
+        "synthea_encounters",
+        "synthea_dx_rate",
+        "synthea_lab_oob_rate",
+        "vdh_case_rate",
+        "vdh_hosp_rate",
+        "nhanes_obesity_rate",
+        "nhanes_smoking_rate",
+        "nih_cxr_images",
+        "low_precision_time_flag",
+        "ambiguous_geo_flag",
+        "nih_geo_limited_flag",
+        "record_count",
+        "created_timestamp"
+      ]
+    },
+    "dimension_tables": [
       {
-        "step": 1,
-        "description": "Load row-level processed data",
-        "input": "data/processed/processed_data.parquet",
-        "columns": ["data_source", "file_name", "file_size_kb", "latency_sec", "validation_passed", "processing_date"]
+        "name": "dim_geography",
+        "columns": ["state_abbr", "state_fips", "rurality_code", "state_name"]
       },
       {
-        "step": 2,
-        "description": "Group by data_source and calculate aggregates",
-        "group_by": ["data_source"],
-        "aggregates": {
-          "n_records": "COUNT(*)",
-          "mean_latency_sec": "AVG(latency_sec)",
-          "p50_latency_sec": "PERCENTILE(latency_sec, 0.5)",
-          "p95_latency_sec": "PERCENTILE(latency_sec, 0.95)",
-          "validation_pass_rate": "SUM(validation_passed) / COUNT(*)",
-          "mean_file_size_kb": "AVG(file_size_kb)"
-        }
+        "name": "dim_date",
+        "columns": ["period_id", "date_start", "date_end", "year", "month", "quarter"]
       },
       {
-        "step": 3,
-        "description": "Append ALL aggregate row",
-        "logic": "UNION ALL with same aggregates calculated across all data_source values"
-      },
-      {
-        "step": 4,
-        "description": "Write to cohort fact table",
-        "output": "data/processed/cohort_fact_va.csv",
-        "format": "CSV with header"
+        "name": "dim_source",
+        "columns": ["source_id", "schema_variant", "source_description", "license"]
       }
     ]
   },
-  
-  "validation_constraints": {
-    "row_level": {
-      "data_source": "NOT NULL, IN ('nhanes', 'synthea', 'vdh')",
-      "file_name": "NOT NULL",
-      "latency_sec": "NOT NULL, >= 0",
-      "validation_passed": "NOT NULL, BOOLEAN",
-      "file_size_kb": ">= 0"
-    },
-    "cohort_level": {
-      "data_source": "IN ('nhanes', 'synthea', 'vdh', 'ALL')",
-      "n_records": "> 0",
-      "validation_pass_rate": "BETWEEN 0.0 AND 1.0",
-      "mean_latency_sec": "> 0",
-      "p50_latency_sec": "<= p95_latency_sec"
-    }
-  },
-  
-  "future_extensions": {
-    "temporal_stratification": {
-      "description": "Add period_id to cohort_fact_va for time-series analysis",
-      "new_grain": "One row per (data_source, period_id)",
-      "primary_key": ["data_source", "period_id"]
-    },
-    "geographic_stratification": {
-      "description": "Add state_abbr for Virginia-specific metrics",
-      "new_grain": "One row per (data_source, state_abbr)",
-      "primary_key": ["data_source", "state_abbr"]
-    },
-    "patient_linkage": {
-      "description": "Use customer_id to link records across files",
-      "join_logic": "LEFT JOIN processed_data p1 ON p1.customer_id = p2.customer_id",
-      "privacy_note": "Requires HMAC key management and IRB approval if using real data"
-    }
-  },
-  
-  "cross_references": {
-    "data_dictionary": "docs/data_dictionary_cohort_va.md",
-    "metrics_spec": "docs/metrics_spec.md",
-    "validation_policy": "docs/methods_validation_policy.md",
-    "processing_script": "src/pipeline/process_raw_data.py",
-    "aggregation_script": "src/pipeline/generate_cohort_summary.py"
-  }
+  "notes": [
+    "NHANES data is national and does not contain state-level geography. Use survey weights (WTINT2YR, WTMEC2YR) to project prevalence rates to Virginia population.",
+    "Synthea synthetic patients default to Massachusetts locations; may need to remap address.state to 'VA' for this analysis.",
+    "VDH data is inherently Virginia-specific (133 localities); state_abbr is always 'VA'.",
+    "NIH chest X-ray data typically lacks patient geography; most records will have nih_geo_limited flag and nih_cxr_images=0.",
+    "CAPSTONE_HMAC_SALT environment variable must be set before running transformation pipeline; never commit salt to repository.",
+    "All dates should be validated and standardized to ISO 8601 format before truncation to YYYYMM.",
+    "Validation flags are additive; a single record may have multiple flags set.",
+    "For NHANES weighted projections, consult CDC analytic guidelines: https://wwwn.cdc.gov/nchs/nhanes/analyticguidelines.aspx"
+  ]
 }

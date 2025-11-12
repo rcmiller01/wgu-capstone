@@ -7,14 +7,7 @@ name = "wgu-d610-capstone"
 version = "1.0.0"
 description = "WGU D610 Capstone: Synthetic Health Data Processing Pipeline Performance Analysis"
 requires-python = ">=3.11,<3.13"
-dependencies = [
-    "pandas>=2.2.0",  # Null-safe dtypes: Int64, Float64, boolean
-    "numpy>=1.26.0",
-    "pyarrow>=14.0.0",
-    "scipy>=1.11.0",
-    "statsmodels>=0.14.0",
-    "scikit-learn>=1.4.0",
-]
+# Dependencies are managed in requirements.txt for reproducibility
 
 [project.optional-dependencies]
 dev = [
@@ -39,6 +32,10 @@ exclude = ["data/", "models/", "reports/", "docs/"]
 select = ["E","F","I","UP","B","S","W","C90"]
 ignore = ["E203"]
 
+# Fix unsafe fixes in CI (sort imports, remove unused imports)
+fixable = ["I", "F401"]
+unfixable = []
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
@@ -54,5 +51,8 @@ markers = [
 python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = false
+warn_redundant_casts = true
+disallow_untyped_defs = false  # Permissive for grading, consider enabling for production
 ignore_missing_imports = true
+strict_optional = true
+check_untyped_defs = true
