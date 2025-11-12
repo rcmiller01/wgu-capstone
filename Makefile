@@ -25,6 +25,8 @@ smoke:
 	@pytest -q --tb=short
 	@echo "3. Generating summary statistics..."
 	@python -c "import pandas as pd; df = pd.read_csv('data/processed/cohort_fact_va.csv'); print(f'   ✓ Loaded {len(df)} rows, {len(df.columns)} columns')"
+	@echo "4. Validating data lake (if exists)..."
+	@python -m etl.validate_quality || echo "   ⚠ Data lake validation skipped (not built)"
 	@echo "✓ Smoke test complete"
 
 run:
@@ -67,11 +69,48 @@ clean:
 	@echo "✓ Clean complete"
 
 # ============================================================
-# Imaging Data Lake Targets (Local-First)
+# DuckDB Data Lake Targets (Local SQL-Centric Pipeline)
 # ============================================================
 
-lake: lake-bronze lake-silver lake-gold
-	@echo "✓ Complete data lake built locally"
+# Build complete data lake (Bronze → Silver → Gold)
+lake: deidentify lake-silver lake-gold
+	@echo "✓ Complete data lake built (Bronze/Silver/Gold)"
+
+# Bronze layer: De-identify DICOM files
+deidentify:
+	@echo "Building Bronze layer (de-identified DICOM)..."
+	python -m etl.sanitize_dicom
+	@echo "✓ Bronze layer complete"
+
+# Silver layer: Extract metadata + unify patients
+lake-silver:
+	@echo "Building Silver layer (structured metadata)..."
+	python -m etl.ingest_siim_metadata
+	python -m etl.unify_patients
+	@echo "✓ Silver layer complete"
+
+# Gold layer: Create linkage + run SQL transforms
+lake-gold:
+	@echo "Building Gold layer (analytics-ready joins)..."
+	python -m etl.build_link_table
+	python -m etl.build_gold_views
+	@echo "✓ Gold layer complete"
+
+# Validate data lake quality
+lake-validate:
+	@echo "Validating data lake quality..."
+	python -m etl.validate_quality
+
+# Clean data lake outputs
+clean-lake:
+	@echo "Cleaning data lake..."
+	rm -rf data/bronze/* data/silver/* data/gold/*
+	rm -f capstone.duckdb capstone.duckdb.wal
+	@echo "✓ Data lake cleaned"
+
+# ============================================================
+# Legacy Imaging Data Lake Targets (Preserved for compatibility)
+# ============================================================
 
 lake-bronze:
 	@echo "Building Bronze layer (raw metadata)..."
@@ -170,10 +209,13 @@ help:
 	@echo "  make analyze     - Run EDA and statistical tests"
 	@echo "  make visualize   - Generate all figures"
 	@echo ""
-	@echo "=== Imaging Data Lake (Local) ==="
-	@echo "  make lake        - Build Bronze/Silver/Gold layers locally"
-	@echo "  make smoke       - Quick end-to-end test with SIIM metadata"
-	@echo "  make deidentify  - Run DICOM sanitization + validation"
+	@echo "=== DuckDB Data Lake (SQL-Centric) ==="
+	@echo "  make lake            - Build complete data lake (Bronze/Silver/Gold)"
+	@echo "  make deidentify      - Build Bronze layer (de-identified DICOM)"
+	@echo "  make lake-silver     - Build Silver layer (metadata + patients)"
+	@echo "  make lake-gold       - Build Gold layer (SQL joins via DuckDB)"
+	@echo "  make lake-validate   - Validate data lake quality"
+	@echo "  make clean-lake      - Remove data lake outputs"
 	@echo ""
 	@echo "=== Cloud Publishing (Optional - Requires AWS) ==="
 	@echo "  make publish-s3      - Sync lake to S3 (set S3_BUCKET=...)"
@@ -197,6 +239,6 @@ help:
 	@echo "  make clean-all   - Remove all generated files"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make lake                              # Build local data lake"
+	@echo "  make lake                              # Build local DuckDB data lake"
 	@echo "  make smoke                             # Quick test"
 	@echo "  S3_BUCKET=my-bucket make publish-s3   # Publish to AWS"

@@ -83,6 +83,35 @@ This executes:
 - `reports/tables/` — Statistical tables (LaTeX/CSV format)
 - `reports/analysis_summary.txt` — Text summary of findings
 
+### SQL + DuckDB Data Lake Path (Optional)
+
+For evaluators interested in the **SQL-centric data engineering** capabilities:
+
+```bash
+# Build local data lake with DuckDB (Bronze → Silver → Gold)
+make lake
+
+# Validate data quality
+make lake-validate
+```
+
+This creates:
+- **Bronze layer**: De-identified DICOM files (`data/bronze/images/`)
+- **Silver layer**: Structured Parquet metadata (`data/silver/`)
+- **Gold layer**: Analytics-ready joins (`data/gold/analytics/`)
+
+**SQL transformations**:
+- `sql/00_init.sql` — Create views over Parquet files
+- `sql/20_gold_joins.sql` — Patient-imaging joins via DuckDB
+- `sql/30_analytics_slices.sql` — Aggregations and summaries
+
+**DuckDB advantages**:
+- Embedded (no external database server)
+- Direct queries on Parquet files
+- SQL portable to Athena/BigQuery/Redshift
+
+See [`docs/duckdb_overview.md`](docs/duckdb_overview.md) for architecture details.
+
 ## 📁 Repository Layout
 
 ```
@@ -99,6 +128,18 @@ wgu-capstone/
 │   │   ├── run_statistical_tests.py
 │   │   └── generate_phase7_outputs.py
 │   └── visualization/       # Plotting utilities
+├── etl/                     # Data lake ETL modules
+│   ├── sanitize_dicom.py   # DICOM de-identification
+│   ├── ingest_siim_metadata.py  # Imaging metadata extraction
+│   ├── unify_patients.py   # Patient data unification
+│   ├── build_link_table.py # Synthetic patient-image linkage
+│   ├── build_gold_views.py # DuckDB SQL orchestration
+│   └── validate_quality.py # Data quality checks
+├── sql/                     # SQL transformation scripts
+│   ├── 00_init.sql         # Create views over Parquet
+│   ├── 10_silver_curate.sql  # Type casting & validation
+│   ├── 20_gold_joins.sql   # Analytics table joins
+│   └── 30_analytics_slices.sql  # Aggregations
 ├── tests/                   # Pytest test suite
 │   ├── test_schema.py
 │   ├── test_assumptions.py
@@ -106,9 +147,12 @@ wgu-capstone/
 ├── data/                    # Data directories
 │   ├── raw/                # Original source data (not committed)
 │   ├── interim/            # Intermediate processing (not committed)
-│   └── processed/          # Final analysis-ready data (committed)
-│       ├── cohort_fact_va.csv      # Main analysis dataset
-│       └── metadata.json            # Dataset provenance
+│   ├── processed/          # Final analysis-ready data (committed)
+│   │   ├── cohort_fact_va.csv      # Main analysis dataset
+│   │   └── metadata.json            # Dataset provenance
+│   ├── bronze/             # De-identified DICOM (not committed)
+│   ├── silver/             # Structured Parquet (not committed)
+│   └── gold/               # Analytics tables (not committed)
 ├── reports/                 # Generated outputs
 │   ├── figures/            # PNG visualizations
 │   ├── tables/             # Statistical tables
@@ -117,6 +161,8 @@ wgu-capstone/
 │   ├── phase_index.md      # Phase-to-artifact mapping
 │   ├── metrics_spec.md     # Variable definitions
 │   ├── privacy_ethics.md   # Ethics & data governance
+│   ├── duckdb_overview.md  # DuckDB architecture guide
+│   ├── sql_equivalents.md  # Cloud SQL portability
 │   └── PIPELINE_EXECUTION.md  # Technical pipeline guide
 ├── resources/               # Configuration files
 │   ├── rules/*.json        # Validation rules

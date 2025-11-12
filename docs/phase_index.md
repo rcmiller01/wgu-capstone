@@ -145,11 +145,60 @@ This document maps each capstone phase to its corresponding artifacts, documenta
 
 ---
 
+## Phase 11: DuckDB Data Lake Extension (Optional)
+
+**Status**: ✅ Complete  
+**Deliverables**: SQL-centric data lake with embedded analytics
+
+**Artifacts**:
+- **ETL Modules** ([`etl/`](../etl/)):
+  - [`etl/sanitize_dicom.py`](../etl/sanitize_dicom.py) — DICOM de-identification
+  - [`etl/ingest_siim_metadata.py`](../etl/ingest_siim_metadata.py) — Imaging metadata extraction
+  - [`etl/unify_patients.py`](../etl/unify_patients.py) — Patient data unification
+  - [`etl/build_link_table.py`](../etl/build_link_table.py) — Synthetic patient-image linkage
+  - [`etl/build_gold_views.py`](../etl/build_gold_views.py) — DuckDB SQL orchestration
+  - [`etl/validate_quality.py`](../etl/validate_quality.py) — Data quality checks
+- **SQL Scripts** ([`sql/`](../sql/)):
+  - [`sql/00_init.sql`](../sql/00_init.sql) — Create views over Parquet files
+  - [`sql/10_silver_curate.sql`](../sql/10_silver_curate.sql) — Type casting & validation
+  - [`sql/20_gold_joins.sql`](../sql/20_gold_joins.sql) — Patient-imaging joins
+  - [`sql/30_analytics_slices.sql`](../sql/30_analytics_slices.sql) — Aggregations
+- **Documentation**:
+  - [`docs/duckdb_overview.md`](duckdb_overview.md) — DuckDB architecture guide
+  - [`docs/sql_equivalents.md`](sql_equivalents.md) — Cloud SQL portability
+  - [`docs/privacy.md`](privacy.md) — Privacy & de-identification standards
+- **Data Lake Layers** (not committed to git):
+  - `data/bronze/images/` — De-identified DICOM files
+  - `data/silver/imaging_instance/` — Imaging metadata (Parquet)
+  - `data/silver/patient_core/` — Unified patient demographics (Parquet)
+  - `data/gold/imaging_link/` — Synthetic patient-image linkage (Parquet)
+  - `data/gold/analytics/` — Analytics-ready joined tables (Parquet)
+
+**Summary**: Extended capstone with local, SQL-centric data lake powered by DuckDB. Demonstrates:
+- Medallion architecture (Bronze/Silver/Gold)
+- External views over Parquet files
+- SQL joins and aggregations
+- Portable SQL syntax (Athena/BigQuery/Redshift compatible)
+- Fully offline, deterministic, and reproducible
+- No external services required (embedded DuckDB)
+
+**Make Targets**:
+- `make lake` — Build complete data lake
+- `make deidentify` — De-identify DICOM files (Bronze layer)
+- `make lake-silver` — Extract metadata + unify patients (Silver layer)
+- `make lake-gold` — Create linkage + run SQL transforms (Gold layer)
+- `make lake-validate` — Validate data quality
+- `make clean-lake` — Remove data lake outputs
+
+---
+
 ## Supporting Documentation
 
 ### Technical Documentation
 - [`docs/PIPELINE_EXECUTION.md`](PIPELINE_EXECUTION.md) — Detailed pipeline guide
 - [`docs/IMPLEMENTATION_SUMMARY.md`](IMPLEMENTATION_SUMMARY.md) — Code architecture
+- [`docs/duckdb_overview.md`](duckdb_overview.md) — DuckDB data lake guide
+- [`docs/sql_equivalents.md`](sql_equivalents.md) — Cloud SQL portability
 - [`resources/join_spec.json`](../resources/join_spec.json) — Data join specification
 - [`resources/rules/*.json`](../resources/rules/) — Validation rules
 

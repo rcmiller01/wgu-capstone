@@ -12,6 +12,12 @@ data/interim/*
 !data/interim/.gitkeep
 data/processed/*
 !data/processed/.gitkeep
+data/bronze/*
+!data/bronze/.gitkeep
+data/silver/*
+!data/silver/.gitkeep
+data/gold/*
+!data/gold/.gitkeep
 models/*
 !models/.gitkeep
 reports/*
@@ -24,3 +30,8 @@ reports/figures/*
 .idea/
 resources/synthea-with-dependencies.jar
 data.zip
+
+# DuckDB database files (generated at runtime, not tracked)
+*.duckdb
+*.duckdb.wal
+capstone.db
