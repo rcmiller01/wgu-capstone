@@ -111,8 +111,13 @@ This document maps each capstone phase to its corresponding artifacts, documenta
   - `figure3_coverage.png` — Data coverage heatmap
 - [`reports/tables/`](../reports/tables/) — Statistical tables
 - [`reports/phase6_phase7_summary.md`](../reports/phase6_phase7_summary.md) — Combined summary
+- **Data Lake Artifacts** (optional):
+  - [`sql/20_gold_joins.sql`](../sql/20_gold_joins.sql) — Patient-imaging joins for analytics
+  - [`sql/30_analytics_slices.sql`](../sql/30_analytics_slices.sql) — Aggregations (modality counts, demographics)
+  - `data/gold/analytics/patient_imaging.parquet` — Joined analytical dataset
+  - `capstone.duckdb` — DuckDB database with external views
 
-**Summary**: Executed planned analyses. Found significant differences in pass rates between sources (χ²=45.2, p<0.001). Latency showed right-skewed distribution (median=2.3s).
+**Summary**: Executed planned analyses. Found significant differences in pass rates between sources (χ²=45.2, p<0.001). Latency showed right-skewed distribution (median=2.3s). **Optional SQL pipeline** enables reproducible joins and aggregations over imaging + patient data.
 
 ---
 
@@ -125,8 +130,12 @@ This document maps each capstone phase to its corresponding artifacts, documenta
 - [`reports/phase8_results_writeup.md`](../reports/phase8_results_writeup.md) — Formal write-up
 - [`reports/phase8_completion_summary.md`](../reports/phase8_completion_summary.md) — Phase summary
 - [`notebooks/03_visualization_dashboard.ipynb`](../notebooks/03_visualization_dashboard.ipynb) — Interactive dashboard
+- **Data Quality Validation** (optional):
+  - [`etl/validate_quality.py`](../etl/validate_quality.py) — Automated DQ checks on Gold layer
+  - `data/silver/imaging_instance/` — Curated imaging metadata (Parquet)
+  - `data/silver/patient_core/` — Unified patient demographics (Parquet)
 
-**Summary**: Interpreted statistical results in context of research questions. Discussed implications for pipeline design. Identified limitations (synthetic data, temporal resolution).
+**Summary**: Interpreted statistical results in context of research questions. Discussed implications for pipeline design. Identified limitations (synthetic data, temporal resolution). **Optional DQ validation** ensures Gold layer data integrity with automated checks (non-null keys, row counts, column presence).
 
 ---
 
@@ -140,8 +149,13 @@ This document maps each capstone phase to its corresponding artifacts, documenta
 - Root: [`README.md`](../README.md) — Repository documentation
 - [`docs/PIPELINE_EXECUTION.md`](PIPELINE_EXECUTION.md) — Technical documentation
 - All code in [`src/`](../src/) — Reproducible pipeline
+- **Data Lake Infrastructure** (optional):
+  - [`sql/00_init.sql`](../sql/00_init.sql) — External views over Parquet (Bronze → Silver)
+  - [`sql/10_silver_curate.sql`](../sql/10_silver_curate.sql) — Type casting and validation
+  - `data/gold/imaging_link/` — Patient-imaging linkage (Parquet)
+  - [`docs/DUCKDB_IMPLEMENTATION.md`](DUCKDB_IMPLEMENTATION.md) — Data lake architecture summary
 
-**Summary**: Finalized all deliverables. Repository configured for grading with deterministic outputs. Documentation complete for reproducibility.
+**Summary**: Finalized all deliverables. Repository configured for grading with deterministic outputs. Documentation complete for reproducibility. **Optional data lake** demonstrates SQL-centric analytics with embedded DuckDB (no external services).
 
 ---
 

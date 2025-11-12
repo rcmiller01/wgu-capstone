@@ -83,34 +83,41 @@ This executes:
 - `reports/tables/` — Statistical tables (LaTeX/CSV format)
 - `reports/analysis_summary.txt` — Text summary of findings
 
-### SQL + DuckDB Data Lake Path (Optional)
+### Local SQL Data Lake Architecture (Optional)
 
-For evaluators interested in the **SQL-centric data engineering** capabilities:
+This project includes an **embedded SQL data lake** using DuckDB and Parquet for medical imaging analytics.
 
+**Quickstart (3 commands)**:
 ```bash
-# Build local data lake with DuckDB (Bronze → Silver → Gold)
+# 1. Sanitize DICOM files → Bronze layer
+make deidentify
+
+# 2. Build Silver/Gold layers with SQL transformations
 make lake
 
-# Validate data quality
-make lake-validate
+# 3. Validate data quality
+make smoke
 ```
 
-This creates:
-- **Bronze layer**: De-identified DICOM files (`data/bronze/images/`)
-- **Silver layer**: Structured Parquet metadata (`data/silver/`)
-- **Gold layer**: Analytics-ready joins (`data/gold/analytics/`)
+**Key features**:
+- **DuckDB embedded SQL engine** — No installation or external services required
+- **Medallion architecture** — Bronze (raw) → Silver (curated) → Gold (analytics)
+- **Parquet columnar storage** — Efficient analytics on imaging + patient data
+- **SQL portability** — Queries work on Athena/BigQuery/Snowflake with minimal changes
 
-**SQL transformations**:
-- `sql/00_init.sql` — Create views over Parquet files
-- `sql/20_gold_joins.sql` — Patient-imaging joins via DuckDB
-- `sql/30_analytics_slices.sql` — Aggregations and summaries
+**Outputs**:
+- `data/bronze/images/` — De-identified DICOM files (PHI scrubbed)
+- `data/silver/` — Structured Parquet (imaging_instance, patient_core)
+- `data/gold/analytics/` — Joined patient-imaging datasets
+- `capstone.duckdb` — DuckDB database with external views over Parquet
 
-**DuckDB advantages**:
-- Embedded (no external database server)
-- Direct queries on Parquet files
-- SQL portable to Athena/BigQuery/Redshift
+**SQL pipeline**:
+- `sql/00_init.sql` — Create views using `read_parquet()`
+- `sql/10_silver_curate.sql` — Type casting and validation
+- `sql/20_gold_joins.sql` — Patient-imaging joins
+- `sql/30_analytics_slices.sql` — Aggregations (modality counts, demographics)
 
-See [`docs/duckdb_overview.md`](docs/duckdb_overview.md) for architecture details.
+See [`docs/duckdb_overview.md`](docs/duckdb_overview.md) for architecture details and [`docs/sql_equivalents.md`](docs/sql_equivalents.md) for cloud migration guidance.
 
 ## 📁 Repository Layout
 

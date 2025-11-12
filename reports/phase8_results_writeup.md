@@ -32,6 +32,18 @@ All data were ingested through a Python-based serverless processing pipeline sim
 3. **Temporal Derivation**: Extraction of month identifiers (YYYY-MM) from heterogeneous date fields
 4. **Performance Logging**: Capture of processing latency and validation outcomes
 
+### Data Lake Architecture
+
+To demonstrate SQL-centric analytics capabilities, the project includes an embedded data lake implementation using **DuckDB** (an embedded SQL engine) and **Parquet columnar storage**. The data lake follows a Medallion architecture with three layers:
+
+- **Bronze Layer**: De-identified DICOM medical imaging files (100 CT scans) with all PHI scrubbed via automated sanitization
+- **Silver Layer**: Structured Parquet metadata tables (imaging instances, unified patient demographics)
+- **Gold Layer**: Analytics-ready joined datasets combining imaging metadata with synthetic patient records
+
+The Gold layer is created through SQL transformations (`sql/20_gold_joins.sql`) that join patient demographics with imaging metadata via a synthetic linkage table. This produces a `patient_imaging.parquet` dataset with 110 rows and 21 columns, suitable for analytical queries. All SQL queries use DuckDB's `read_parquet()` function to create external views over Parquet files without data duplication, enabling efficient analytical queries without requiring external database services. The SQL syntax is portable to cloud platforms (AWS Athena, Google BigQuery, Snowflake) with minimal modifications.
+
+**Privacy Note**: All DICOM files undergo automated de-identification that removes or replaces 47 PHI data elements per HIPAA Safe Harbor guidelines. No actual protected health information exists in the dataset. Patient identifiers are hashed using HMAC-SHA256 for privacy-preserving linkage.
+
 ### Validation Framework
 
 Two validation policies were compared:
