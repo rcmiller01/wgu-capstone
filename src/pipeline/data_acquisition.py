@@ -14,6 +14,7 @@ Usage:
     python -m src.pipeline.data_acquisition --vdh
     python -m src.pipeline.data_acquisition --nih --n-images 2000
 """
+
 from __future__ import annotations
 
 import argparse
@@ -21,16 +22,13 @@ import json
 import logging
 import subprocess
 import sys
-from pathlib import Path
-from datetime import datetime
-from typing import List, Optional
 import urllib.request
-import shutil
+from datetime import datetime
+from pathlib import Path
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -50,23 +48,18 @@ for directory in [RAW_DIR, SYNTHEA_DIR, NHANES_DIR, VDH_DIR, NIH_DIR]:
 
 class AcquisitionLogger:
     """Track data acquisition operations."""
-    
+
     def __init__(self, log_path: Path = DATA_DIR / "acquisition_log.txt"):
         self.log_path = log_path
-    
+
     def log(self, source: str, status: str, details: dict):
         """Append acquisition event to log."""
         timestamp = datetime.now().isoformat()
-        log_entry = {
-            "timestamp": timestamp,
-            "source": source,
-            "status": status,
-            "details": details
-        }
-        
-        with open(self.log_path, 'a') as f:
-            f.write(json.dumps(log_entry) + '\n')
-        
+        log_entry = {"timestamp": timestamp, "source": source, "status": status, "details": details}
+
+        with open(self.log_path, "a") as f:
+            f.write(json.dumps(log_entry) + "\n")
+
         logger.info(f"{source}: {status} - {details}")
 
 
@@ -77,78 +70,80 @@ def generate_synthea_data(
     n_patients: int = 5000,
     seed: int = 12345,
     state: str = "Virginia",
-    output_dir: Path = SYNTHEA_DIR
+    output_dir: Path = SYNTHEA_DIR,
 ) -> bool:
     """
     Generate synthetic patient records using Synthea.
-    
+
     Args:
         n_patients: Number of patients to generate
         seed: Random seed for reproducibility
         state: US state for demographics (default: Virginia)
         output_dir: Output directory for FHIR JSON files
-    
+
     Returns:
         True if successful, False otherwise
-    
+
     Prerequisites:
         - Java 11+ installed
         - Synthea JAR downloaded to resources/synthea-with-dependencies.jar
-        
+
     Download Synthea JAR:
         https://github.com/synthetichealth/synthea/releases/latest/download/synthea-with-dependencies.jar
     """
     logger.info(f"Generating Synthea data: {n_patients} patients, seed={seed}, state={state}")
-    
+
     # Check for Synthea JAR
     synthea_jar = PROJECT_ROOT / "resources" / "synthea-with-dependencies.jar"
-    
+
     if not synthea_jar.exists():
         logger.error(f"Synthea JAR not found at {synthea_jar}")
         logger.error("Download from: https://github.com/synthetichealth/synthea/releases/latest")
-        acq_logger.log("synthea", "FAILED", {"reason": "JAR not found", "expected_path": str(synthea_jar)})
+        acq_logger.log(
+            "synthea", "FAILED", {"reason": "JAR not found", "expected_path": str(synthea_jar)}
+        )
         return False
-    
+
     # Check for Java
     try:
         java_version = subprocess.run(
-            ["java", "-version"],
-            capture_output=True,
-            text=True,
-            check=True
+            ["java", "-version"], capture_output=True, text=True, check=True
         )
         logger.info(f"Java found: {java_version.stderr.split()[2]}")
     except (subprocess.CalledProcessError, FileNotFoundError):
         logger.error("Java not found. Install Java 11+ from https://adoptium.net/")
         acq_logger.log("synthea", "FAILED", {"reason": "Java not installed"})
         return False
-    
+
     # Prepare output directory
     fhir_output = output_dir / "fhir"
     fhir_output.mkdir(parents=True, exist_ok=True)
-    
+
     # Build command
     cmd = [
         "java",
-        "-jar", str(synthea_jar),
-        "-p", str(n_patients),
-        "-s", str(seed),
+        "-jar",
+        str(synthea_jar),
+        "-p",
+        str(n_patients),
+        "-s",
+        str(seed),
         "--exporter.fhir.export=true",
         f"--exporter.baseDirectory={output_dir}",
-        state
+        state,
     ]
-    
+
     try:
         logger.info(f"Running Synthea (this may take 10-30 minutes for {n_patients} patients)...")
         result = subprocess.run(cmd, capture_output=True, text=True, check=True, cwd=PROJECT_ROOT)
-        
+
         # Count generated files
         fhir_files = list(fhir_output.glob("*.json"))
         file_count = len(fhir_files)
-        
+
         # Calculate total size
         total_size_mb = sum(f.stat().st_size for f in fhir_files) / (1024 * 1024)
-        
+
         # Save metadata
         metadata = {
             "n_patients": n_patients,
@@ -156,16 +151,16 @@ def generate_synthea_data(
             "state": state,
             "generated_files": file_count,
             "total_size_mb": round(total_size_mb, 2),
-            "generation_date": datetime.now().isoformat()
+            "generation_date": datetime.now().isoformat(),
         }
-        
-        with open(output_dir / "metadata.json", 'w', encoding='utf-8') as f:
+
+        with open(output_dir / "metadata.json", "w", encoding="utf-8") as f:
             json.dump(metadata, f, indent=2)
-        
+
         acq_logger.log("synthea", "SUCCESS", metadata)
         logger.info(f"Synthea generation complete: {file_count} files, {total_size_mb:.2f} MB")
         return True
-        
+
     except subprocess.CalledProcessError as e:
         logger.error(f"Synthea generation failed: {e.stderr}")
         acq_logger.log("synthea", "FAILED", {"error": str(e)})
@@ -176,119 +171,118 @@ def download_file(url: str, dest_path: Path) -> bool:
     """Download a file with progress indication."""
     try:
         logger.info(f"Downloading {url} -> {dest_path.name}")
-        
+
         with urllib.request.urlopen(url) as response:
-            total_size = int(response.headers.get('Content-Length', 0))
-            
-            with open(dest_path, 'wb') as f:
+            total_size = int(response.headers.get("Content-Length", 0))
+
+            with open(dest_path, "wb") as f:
                 downloaded = 0
                 chunk_size = 8192
-                
+
                 while True:
                     chunk = response.read(chunk_size)
                     if not chunk:
                         break
-                    
+
                     f.write(chunk)
                     downloaded += len(chunk)
-                    
+
                     if total_size > 0:
                         progress = (downloaded / total_size) * 100
-                        print(f"\r  Progress: {progress:.1f}%", end='', flush=True)
-        
+                        print(f"\r  Progress: {progress:.1f}%", end="", flush=True)
+
         print()  # New line after progress
         logger.info(f"Downloaded {dest_path.name} ({dest_path.stat().st_size / 1024:.1f} KB)")
         return True
-        
+
     except Exception as e:
         logger.error(f"Download failed: {e}")
         return False
 
 
 def download_nhanes_data(
-    cycles: List[str] = None,
-    components: List[str] = None,
-    output_dir: Path = NHANES_DIR
+    cycles: list[str] = None, components: list[str] = None, output_dir: Path = NHANES_DIR
 ) -> bool:
     """
     Download NHANES survey data from CDC.
-    
+
     Args:
         cycles: Survey cycles to download (e.g., ["2017-2018", "2019-2020"])
         components: Data components (e.g., ["DEMO", "BMX", "TCHOL"])
         output_dir: Output directory
-    
+
     Returns:
         True if all downloads successful
-    
+
     NHANES URLs:
         https://wwwn.cdc.gov/Nchs/Nhanes/[CYCLE]/[COMPONENT]_[LETTER].XPT
-        
+
     Examples:
         2017-2018 Demographics: DEMO_J.XPT (J = 2017-2018)
         2019-2020 Demographics: DEMO_K.XPT (K = 2019-2020)
     """
     if cycles is None:
         cycles = ["2017-2018", "2019-2020"]
-    
+
     if components is None:
         # Select key components for health data
         components = [
-            "DEMO",   # Demographics
-            "BMX",    # Body Measures (height, weight, BMI)
+            "DEMO",  # Demographics
+            "BMX",  # Body Measures (height, weight, BMI)
             "TCHOL",  # Total Cholesterol
-            "BPQ"     # Blood Pressure Questionnaire
+            "BPQ",  # Blood Pressure Questionnaire
         ]
-    
+
     # Cycle letter codes
-    cycle_codes = {
-        "2017-2018": "J",
-        "2019-2020": "K"
-    }
-    
+    cycle_codes = {"2017-2018": "J", "2019-2020": "K"}
+
     base_url = "https://wwwn.cdc.gov/Nchs/Nhanes"
     downloaded_files = []
     failed_downloads = []
-    
+
     for cycle in cycles:
         if cycle not in cycle_codes:
             logger.warning(f"Unknown cycle: {cycle}, skipping")
             continue
-        
+
         cycle_letter = cycle_codes[cycle]
         cycle_dir = output_dir / cycle
         cycle_dir.mkdir(parents=True, exist_ok=True)
-        
+
         for component in components:
             filename = f"{component}_{cycle_letter}.XPT"
             url = f"{base_url}/{cycle}/{filename}"
             dest = cycle_dir / filename
-            
+
             if dest.exists():
                 logger.info(f"File already exists: {filename}, skipping")
                 downloaded_files.append(str(dest))
                 continue
-            
+
             if download_file(url, dest):
                 downloaded_files.append(str(dest))
             else:
                 failed_downloads.append(url)
-    
+
     # Log results
-    acq_logger.log("nhanes", "COMPLETE" if not failed_downloads else "PARTIAL", {
-        "cycles": cycles,
-        "components": components,
-        "downloaded_files": len(downloaded_files),
-        "failed_downloads": len(failed_downloads),
-        "files": downloaded_files
-    })
-    
+    acq_logger.log(
+        "nhanes",
+        "COMPLETE" if not failed_downloads else "PARTIAL",
+        {
+            "cycles": cycles,
+            "components": components,
+            "downloaded_files": len(downloaded_files),
+            "failed_downloads": len(failed_downloads),
+            "files": downloaded_files,
+        },
+    )
+
     if failed_downloads:
         logger.warning(f"Some downloads failed: {failed_downloads}")
         return False
-    
+
     logger.info(f"NHANES download complete: {len(downloaded_files)} files")
-    
+
     # Create README
     readme_content = f"""# NHANES Data
 
@@ -318,27 +312,24 @@ df.to_csv('DEMO_J.csv', index=False)
 - Codebooks: https://wwwn.cdc.gov/nchs/nhanes/continuousnhanes/default.aspx
 - Survey Design: https://wwwn.cdc.gov/nchs/nhanes/analyticguidelines.aspx
 """
-    
-    with open(output_dir / "README.md", 'w', encoding='utf-8') as f:
+
+    with open(output_dir / "README.md", "w", encoding="utf-8") as f:
         f.write(readme_content)
-    
+
     return True
 
 
-def download_vdh_data(
-    datasets: List[str] = None,
-    output_dir: Path = VDH_DIR
-) -> bool:
+def download_vdh_data(datasets: list[str] = None, output_dir: Path = VDH_DIR) -> bool:
     """
     Download Virginia Department of Health data.
-    
+
     Args:
         datasets: List of dataset IDs or URLs
         output_dir: Output directory
-    
+
     Returns:
         True if successful
-    
+
     Note:
         This is a placeholder. Actual implementation depends on VDH data portal structure.
         Users may need to manually download CSV files from:
@@ -346,7 +337,7 @@ def download_vdh_data(
     """
     logger.info("VDH data acquisition placeholder")
     logger.info("Manual download required from: https://data.virginia.gov/browse?tags=health")
-    
+
     # Create placeholder README
     readme_content = """# Virginia Department of Health Data
 
@@ -393,37 +384,39 @@ response = requests.get(url)
 data = response.json()
 ```
 """
-    
-    with open(output_dir / "README.md", 'w', encoding='utf-8') as f:
+
+    with open(output_dir / "README.md", "w", encoding="utf-8") as f:
         f.write(readme_content)
-    
-    acq_logger.log("vdh", "MANUAL_REQUIRED", {
-        "message": "User must manually download from data.virginia.gov",
-        "url": "https://data.virginia.gov/browse?tags=health"
-    })
-    
+
+    acq_logger.log(
+        "vdh",
+        "MANUAL_REQUIRED",
+        {
+            "message": "User must manually download from data.virginia.gov",
+            "url": "https://data.virginia.gov/browse?tags=health",
+        },
+    )
+
     logger.info(f"Created README: {output_dir / 'README.md'}")
     logger.warning("VDH data requires manual download - see README for instructions")
-    
+
     return True
 
 
 def download_nih_xray_sample(
-    n_images: int = 2000,
-    output_dir: Path = NIH_DIR,
-    stratify_by_label: bool = True
+    n_images: int = 2000, output_dir: Path = NIH_DIR, stratify_by_label: bool = True
 ) -> bool:
     """
     Download NIH Chest X-Ray dataset sample.
-    
+
     Args:
         n_images: Number of images to download (full dataset = 112,120)
         output_dir: Output directory
         stratify_by_label: If True, sample evenly across pathology labels
-    
+
     Returns:
         True if successful
-    
+
     Note:
         Full dataset is ~42 GB. This function provides instructions for:
         1. Kaggle CLI download (requires account + API key)
@@ -431,7 +424,7 @@ def download_nih_xray_sample(
         3. Sampling strategy to reduce size
     """
     logger.info(f"NIH Chest X-Ray dataset - sampling {n_images} images")
-    
+
     # Create placeholder README
     readme_content = f"""# NIH Chest X-Ray Dataset
 
@@ -533,20 +526,24 @@ Classification and Localization of Common Thorax Diseases.
 
 CC0 (Public Domain)
 """
-    
-    with open(output_dir / "README.md", 'w', encoding='utf-8') as f:
+
+    with open(output_dir / "README.md", "w", encoding="utf-8") as f:
         f.write(readme_content)
-    
-    acq_logger.log("nih_xray", "MANUAL_REQUIRED", {
-        "message": "User must download via Kaggle or NIH Box - see README",
-        "target_sample_size": n_images,
-        "full_dataset_size_gb": 42,
-        "estimated_sample_size_gb": round((n_images/112120)*42, 1)
-    })
-    
+
+    acq_logger.log(
+        "nih_xray",
+        "MANUAL_REQUIRED",
+        {
+            "message": "User must download via Kaggle or NIH Box - see README",
+            "target_sample_size": n_images,
+            "full_dataset_size_gb": 42,
+            "estimated_sample_size_gb": round((n_images / 112120) * 42, 1),
+        },
+    )
+
     logger.info(f"Created README: {output_dir / 'README.md'}")
     logger.warning("NIH X-Ray data requires manual download - see README for instructions")
-    
+
     return True
 
 
@@ -554,67 +551,75 @@ def main():
     """CLI entry point."""
     parser = argparse.ArgumentParser(
         description="Acquire data sources for WGU D610 Capstone",
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    
+
     # Source selection
-    parser.add_argument('--all', action='store_true', help='Acquire all data sources')
-    parser.add_argument('--synthea', action='store_true', help='Generate Synthea data')
-    parser.add_argument('--nhanes', action='store_true', help='Download NHANES data')
-    parser.add_argument('--vdh', action='store_true', help='Setup VDH download instructions')
-    parser.add_argument('--nih', action='store_true', help='Setup NIH X-Ray download instructions')
-    
+    parser.add_argument("--all", action="store_true", help="Acquire all data sources")
+    parser.add_argument("--synthea", action="store_true", help="Generate Synthea data")
+    parser.add_argument("--nhanes", action="store_true", help="Download NHANES data")
+    parser.add_argument("--vdh", action="store_true", help="Setup VDH download instructions")
+    parser.add_argument("--nih", action="store_true", help="Setup NIH X-Ray download instructions")
+
     # Synthea options
-    parser.add_argument('--n-patients', type=int, default=5000, help='Number of Synthea patients (default: 5000)')
-    parser.add_argument('--seed', type=int, default=12345, help='Random seed (default: 12345)')
-    parser.add_argument('--state', type=str, default='Virginia', help='State for demographics (default: Virginia)')
-    
+    parser.add_argument(
+        "--n-patients", type=int, default=5000, help="Number of Synthea patients (default: 5000)"
+    )
+    parser.add_argument("--seed", type=int, default=12345, help="Random seed (default: 12345)")
+    parser.add_argument(
+        "--state", type=str, default="Virginia", help="State for demographics (default: Virginia)"
+    )
+
     # NHANES options
-    parser.add_argument('--cycles', type=str, default='2017-2018,2019-2020', 
-                       help='NHANES cycles (default: 2017-2018,2019-2020)')
-    
+    parser.add_argument(
+        "--cycles",
+        type=str,
+        default="2017-2018,2019-2020",
+        help="NHANES cycles (default: 2017-2018,2019-2020)",
+    )
+
     # NIH options
-    parser.add_argument('--n-images', type=int, default=2000, help='Number of NIH images to sample (default: 2000)')
-    
+    parser.add_argument(
+        "--n-images", type=int, default=2000, help="Number of NIH images to sample (default: 2000)"
+    )
+
     args = parser.parse_args()
-    
+
     # If no specific source selected and not --all, show help
     if not any([args.all, args.synthea, args.nhanes, args.vdh, args.nih]):
         parser.print_help()
         sys.exit(1)
-    
+
     success = True
-    
+
     # Run selected acquisitions
     if args.all or args.synthea:
         logger.info("=" * 60)
         logger.info("SYNTHEA DATA GENERATION")
         logger.info("=" * 60)
         success &= generate_synthea_data(
-            n_patients=args.n_patients,
-            seed=args.seed,
-            state=args.state
+            n_patients=args.n_patients, seed=args.seed, state=args.state
         )
-    
+
     if args.all or args.nhanes:
         logger.info("=" * 60)
         logger.info("NHANES DATA DOWNLOAD")
         logger.info("=" * 60)
-        cycles = args.cycles.split(',')
+        cycles = args.cycles.split(",")
         success &= download_nhanes_data(cycles=cycles)
-    
+
     if args.all or args.vdh:
         logger.info("=" * 60)
         logger.info("VIRGINIA DOH DATA SETUP")
         logger.info("=" * 60)
         success &= download_vdh_data()
-    
+
     if args.all or args.nih:
         logger.info("=" * 60)
         logger.info("NIH CHEST X-RAY SETUP")
         logger.info("=" * 60)
         success &= download_nih_xray_sample(n_images=args.n_images)
-    
+
     # Summary
     logger.info("=" * 60)
     if success:
@@ -623,7 +628,7 @@ def main():
         logger.warning("DATA ACQUISITION COMPLETED WITH ERRORS")
     logger.info(f"Check acquisition log: {DATA_DIR / 'acquisition_log.txt'}")
     logger.info("=" * 60)
-    
+
     sys.exit(0 if success else 1)
 
 

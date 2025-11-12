@@ -1,18 +1,42 @@
 repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: ['--maxkb=5000']
+      - id: check-merge-conflict
+      - id: debug-statements
+      - id: mixed-line-ending
+        args: [--fix=auto]
+
   - repo: https://github.com/psf/black
     rev: 24.10.0
     hooks:
       - id: black
         args: [--line-length=100]
         files: ^(src|tests)/
+        language_version: python3.11
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.6.9
     hooks:
       - id: ruff
-        args: [--line-length=100]
+        args: [--fix, --exit-non-zero-on-fix]
         files: ^(src|tests)/
       - id: ruff-format
+        files: ^(src|tests)/
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-all, pandas-stubs]
+        args: [--ignore-missing-imports, --python-version=3.11]
         files: ^(src|tests)/
 
   - repo: https://github.com/kynan/nbstripout
@@ -21,11 +45,3 @@ repos:
       - id: nbstripout
         files: \.ipynb$
         args: [--keep-count, --keep-output, --extra-keys=metadata.toc]
-
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
-    hooks:
-      - id: end-of-file-fixer
-      - id: trailing-whitespace
-      - id: mixed-line-ending
-        args: [--fix=auto]

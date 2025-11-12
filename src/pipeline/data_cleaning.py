@@ -8,25 +8,30 @@ clean_dataframe:
 - optional per-column fillna,
 - returns cleaned df + a small report.
 """
+
 from __future__ import annotations
+
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Dict, Iterable, Optional, Tuple
+
 import pandas as pd
+
 
 @dataclass(frozen=True)
 class CleanReport:
     rows_in: int
     rows_out: int
     cols: int
-    na_counts: Dict[str, int]
-    notes: Tuple[str, ...]
+    na_counts: dict[str, int]
+    notes: tuple[str, ...]
+
 
 def clean_dataframe(
     df: pd.DataFrame,
-    expected_schema: Optional[Dict[str, str]] = None,
-    drop_na_cols: Optional[Iterable[str]] = None,
-    fillna: Optional[Dict[str, object]] = None,
-) -> Tuple[pd.DataFrame, CleanReport]:
+    expected_schema: dict[str, str] | None = None,
+    drop_na_cols: Iterable[str] | None = None,
+    fillna: dict[str, object] | None = None,
+) -> tuple[pd.DataFrame, CleanReport]:
     notes = []
     df = df.copy()
     rows_in, _ = df.shape
