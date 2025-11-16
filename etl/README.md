@@ -1,4 +1,16 @@
-# ETL Pipeline for Imaging Data
+# Imaging ETL Module (DuckDB Lakehouse Extension)
+
+## Context
+
+This module extends the **core serverless FHIR pipeline** (the primary focus of this capstone) by demonstrating that the same data engineering patterns—medallion architecture, SQL-based transformations, and quality validation—generalize to medical imaging workflows. While the main research question examines FHIR data latency and validation pass rates, this imaging module shows the pipeline's flexibility across multiple healthcare data modalities.
+
+**Relationship to Core Project**:
+- **Core**: Serverless FHIR pipeline (Synthea/NHANES/VDH) → validation metrics → latency analysis
+- **Extension**: Medical imaging (DICOM/CT) → DuckDB lakehouse → same Bronze/Silver/Gold pattern
+
+This is an **optional demonstration** of the pipeline architecture's versatility—graders should focus on the FHIR results in `reports/phase8_results_writeup.md`.
+
+---
 
 ## Overview
 
