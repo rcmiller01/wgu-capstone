@@ -34,7 +34,7 @@
 | **G2** | Tool capabilities justified | Python: pandas, scipy, Great Expectations, cloud integration | ✅ |
 | **G3** | Tool appropriate for methods | Supports t-test, bootstrap, visualization | ✅ |
 | **H** | IRB statement | Proposal § IRB Status (exempt - no human subjects) | ✅ |
-| **I** | APA references | [references/apa.bib](references/apa.bib) (10+ sources) | ✅ |
+| **I** | APA references | Citations in written report (10+ sources) | ✅ |
 
 **Task 2 Status**: ✅ All components present
 
@@ -147,7 +147,7 @@
 | Figures render correctly | ✅ | All PNG files viewable |
 | Code blocks have syntax highlighting | ✅ | Language specified (python, json, powershell) |
 | Grammar and spelling checked | 🔄 | **TO DO**: Run spell check on all .md files |
-| APA references formatted | ✅ | BibTeX entries in references/apa.bib |
+| APA references formatted | ✅ | Citations in written report |
 
 ### Code Quality
 
@@ -212,7 +212,6 @@ capstone_submission_v1/
 ├── src/                               Full source code
 ├── resources/                         Rules and join spec
 ├── tests/                             Test suite
-├── references/                        BibTeX bibliography
 │
 ├── pyproject.toml
 ├── requirements.txt
@@ -241,7 +240,6 @@ Compress-Archive -Path `
   src, `
   resources, `
   tests, `
-  references, `
   pyproject.toml, `
   requirements.txt, `
   Makefile `
@@ -264,7 +262,7 @@ Compress-Archive -Path `
 
 - [ ] **Apply APA Formatting**: Times New Roman 12pt, double spacing, running head, page numbers
 
-- [ ] **Add Citations**: Convert in-text references to APA 7th edition with references/apa.bib
+- [ ] **Add Citations**: Verify in-text references follow APA 7th edition format
 
 - [ ] **Spell Check**: Run grammar check on all DOCX files
 
