@@ -2,6 +2,8 @@
 
 **Purpose**: Storage for all project data across acquisition, cleaning, and processing stages
 
+> **⚠️ Note on Raw Data Files**: Raw source files are **not committed to the repository** to keep the project lightweight and avoid licensing/size issues. To reproduce results, download the data as described in [`docs/data_sources.md`](../docs/data_sources.md) and place them under `data/raw/` following the directory structure below. Processed outputs are included in the repository for grader convenience.
+
 ---
 
 ## Directory Structure
