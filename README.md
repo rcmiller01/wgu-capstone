@@ -15,7 +15,7 @@ This project implements and evaluates a serverless FHIR data processing pipeline
 - Impact of data quality flags on performance metrics
 - Statistical comparison of processing outcomes
 
-**Key Deliverable**: A reproducible data pipeline with validated outputs suitable for comparative performance analysis.
+**Key Deliverable**: A reproducible data pipeline with validated outputs suitable for comparative performance analysis. See [`src/pipeline/run_pipeline.py`](src/pipeline/run_pipeline.py) for the main orchestration script and [`notebooks/01_exploratory_data_analysis.ipynb`](notebooks/01_exploratory_data_analysis.ipynb) for interactive demonstration.
 
 ## 📊 Datasets & Licensing
 
@@ -43,12 +43,6 @@ This repository includes a **small processed sample** for grading purposes. The 
 ```bash
 # Create virtual environment
 python -m venv .venv
-
-# Activate (Windows PowerShell)
-.\.venv\Scripts\Activate.ps1
-
-# Activate (Linux/macOS)
-source .venv/bin/activate
 
 # Install dependencies (pinned versions from requirements.txt)
 python -m pip install -U pip
