@@ -1,5 +1,9 @@
 # WGU D610 Capstone: Synthetic Health Data Processing Pipeline
 
+**A Paired t-Test Analysis of a Serverless FHIR Lakehouse for Streamlined and Consistent Rural Health Data Exchange**
+
+---
+
 **WGU Capstone Project** — Analysis of data processing pipeline performance for multi-source health data integration, focusing on validation accuracy and latency characteristics.
 
 ## 🎯 Project Scope
