@@ -1,0 +1,5 @@
+data_source,n_records,mean_latency_sec,p50_latency_sec,p95_latency_sec,validation_pass_rate,mean_file_size_kb
+nhanes,8,5.63,5.94,6.59,1.0,20.42
+synthea,1000,20.46,16.16,42.06,0.959,3569.44
+vdh,2,3.44,3.44,4.09,1.0,249.82
+ALL,1010,20.31,16.12,41.56,0.9594,3534.76
