@@ -333,7 +333,7 @@ A large-scale dataset of chest X-ray images with weak supervision labels for 14 
 
 **Boundary**: Study measures pipeline latency and data quality validation, not patient health outcomes, diagnostic accuracy, or care quality.
 
-**Justification**: Aligns with MSDA program's emphasis on applied analytics and operational improvement. Clinical outcome research requires IRB approval, longitudinal cohorts, and clinical domain expertise beyond the scope of a data analytics capstone.
+**Justification**: Aligns with applied analytics and operational improvement objectives. Clinical outcome research requires IRB approval, longitudinal cohorts, and clinical domain expertise beyond the scope of a data analytics project.
 
 **Exclusion**: Clinical decision support, treatment effectiveness, patient safety metrics.
 
@@ -382,7 +382,7 @@ The four selected data sources collectively provide:
 - ✅ **HIPAA Compliance**: De-identified or synthetic
 - ✅ **Durability**: High to very high long-term availability
 
-**Limitations** (external) are acknowledged with mitigation strategies. **Delimitations** (chosen) are justified as reasonable scope boundaries for a data analytics capstone focused on operational pipeline performance in rural healthcare settings.
+**Limitations** (external) are acknowledged with mitigation strategies. **Delimitations** (chosen) are justified as reasonable scope boundaries for a data analytics project focused on operational pipeline performance in rural healthcare settings.
 
 ---
 

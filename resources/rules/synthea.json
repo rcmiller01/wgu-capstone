@@ -263,7 +263,7 @@
         "after_transform": true
       },
       "severity": "error",
-      "on_fail_hint": "customer_id must be generated via HMAC_SHA256(patient_id, ENV:CAPSTONE_HMAC_SALT)"
+      "on_fail_hint": "customer_id must be generated via HMAC_SHA256(patient_id, ENV:PIPELINE_HMAC_SALT)"
     },
     {
       "rule_id": "syn_024",
@@ -402,3 +402,4 @@
     }
   ]
 }
+

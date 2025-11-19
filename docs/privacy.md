@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes privacy protections implemented for medical imaging data in the capstone project, aligned with HIPAA Safe Harbor standards and DICOM PS3.15 Annex E de-identification guidelines.
+This document describes privacy protections implemented for medical imaging data, aligned with HIPAA Safe Harbor standards and DICOM PS3.15 Annex E de-identification guidelines.
 
 ## De-identification Standards
 
@@ -60,7 +60,7 @@ hash = SHA256(salt + original_id)[:16]
 
 ### Salting Strategy
 
-- **Salt**: `"capstone_2025"` (consistent across all scripts)
+- **Salt**: Configurable via environment variable (consistent across all scripts)
 - **Stored**: In code (not secret for de-identified research data)
 - **Production**: Use environment variable for per-deployment salt
 
@@ -112,7 +112,7 @@ See `infrastructure/iam_policies/s3_glue_athena.json` for least-privilege access
     "s3:GetObject",
     "s3:PutObject"
   ],
-  "Resource": "arn:aws:s3:::capstone-bucket/datalake/*"
+  "Resource": "arn:aws:s3:::healthdata-bucket/datalake/*"
 }
 ```
 
@@ -174,7 +174,7 @@ All de-identification actions logged:
 
 This project is **educational/research only**:
 
-- **Purpose**: Demonstrate serverless FHIR pipeline for capstone
+- **Purpose**: Demonstrate serverless FHIR pipeline for healthcare data integration
 - **Population**: De-identified CT imaging cases (no patient contact)
 - **IRB status**: Exempt (no human subjects, de-identified data)
 
@@ -201,8 +201,6 @@ For production deployment:
 
 For privacy questions:
 
-- **Project Lead**: Robert Miller
-- **Email**: robert.miller@wgu.edu
 - **Repository**: https://github.com/rcmiller01/wgu-capstone
 
 ---
@@ -221,7 +219,7 @@ customer_id = hash_128(instance_uid + global_seed) % N + 1
 
 Where:
 - `instance_uid`: DICOM SOPInstanceUID (unique identifier for each image)
-- `global_seed`: Fixed string "capstone_2025" for reproducibility
+- `global_seed`: Configurable string for reproducibility (set via environment)
 - `hash_128`: First 128 bits (16 bytes) of SHA-256 hash
 - `N`: Total number of patients in Synthea cohort
 - Result: customer_id in range [1, N]

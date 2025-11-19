@@ -1,5 +1,5 @@
 """
-ETL package for WGU D610 Capstone.
+ETL package for health data lake pipeline.
 
 This package contains modules for building a local, SQL-centric data lake
 using DuckDB and Parquet files.

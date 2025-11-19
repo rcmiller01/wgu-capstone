@@ -84,7 +84,7 @@ df['period_id'] = df['encounter_date'].dt.strftime('%Y%m')
 **customer_id** (HMAC hash):
 ```python
 import hmac, hashlib, os
-salt = os.getenv('CAPSTONE_HMAC_SALT')
+salt = os.getenv('PIPELINE_HMAC_SALT')
 df['customer_id'] = df['patient_id'].apply(
     lambda pid: hmac.new(salt.encode(), pid.encode(), hashlib.sha256).hexdigest()
 )

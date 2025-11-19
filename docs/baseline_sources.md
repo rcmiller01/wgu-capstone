@@ -186,7 +186,7 @@ This study does **not measure actual manual data entry time or accuracy** from a
 
 **Acceptable Trade-Off:**
 
-For a capstone study focused on **proof-of-concept engineering and analytics**, an inferred baseline is reasonable given:
+For a proof-of-concept study focused on **engineering and analytics**, an inferred baseline is reasonable given:
 - No access to live manual FHIR integration workflows to measure
 - Literature provides sufficient evidence for credible baseline range
 - Primary goal is demonstrating **serverless pipeline feasibility and measurement methodology**, not definitive superiority claims

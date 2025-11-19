@@ -199,7 +199,7 @@ clean-all: clean clean-lake
 	@echo "✓ All generated files removed"
 
 help:
-	@echo "WGU D610 Capstone - Available targets:"
+	@echo "Health Data Lake - Available targets:"
 	@echo ""
 	@echo "=== Core Pipeline ==="
 	@echo "  make init        - Install dependencies"

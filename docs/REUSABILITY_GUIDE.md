@@ -483,7 +483,7 @@ Your deployment is successful when:
 
 **Version**: 1.0  
 **License**: MIT (see LICENSE file)  
-**Contact**: robert.miller@wgu.edu  
+**Repository**: https://github.com/rcmiller01/health-data-lake
 **Last Updated**: November 11, 2025
 
 ---

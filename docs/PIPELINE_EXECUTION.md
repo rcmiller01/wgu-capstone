@@ -3,7 +3,7 @@
 ## Prerequisites
 
 1. **Python Environment**: Python 3.11+ with required packages installed
-2. **Environment Variable**: Set `CAPSTONE_HMAC_SALT` for customer_id hashing
+2. **Environment Variable**: Set `PIPELINE_HMAC_SALT` for customer_id hashing
 3. **Data Files**: Ensure all data sources are in `data/raw/` directories
 
 ## Setup
@@ -17,7 +17,7 @@ pip install -r requirements.txt
 ### 2. Set Environment Variable
 
 ```powershell
-$env:CAPSTONE_HMAC_SALT='your-secret-salt-value-here'
+$env:PIPELINE_HMAC_SALT='your-secret-salt-value-here'
 ```
 
 ## Execution
@@ -116,10 +116,10 @@ pytest tests/ -v
 
 ## Troubleshooting
 
-### Error: "CAPSTONE_HMAC_SALT environment variable not set"
+### Error: "PIPELINE_HMAC_SALT environment variable not set"
 **Solution**: Set environment variable before running:
 ```powershell
-$env:CAPSTONE_HMAC_SALT='your-secret-salt'
+$env:PIPELINE_HMAC_SALT='your-secret-salt'
 ```
 
 ### Error: "FHIR directory not found"

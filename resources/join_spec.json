@@ -31,7 +31,7 @@
     "name": "customer_id",
     "applies_to": ["synthea"],
     "method": "HMAC_SHA256",
-    "secret_location": "ENV:CAPSTONE_HMAC_SALT (not committed)",
+    "secret_location": "ENV:PIPELINE_HMAC_SALT (not committed)",
     "input_fields": ["patient_id OR synthea internal id"],
     "reversible": false,
     "notes": "Hash synthetic patient IDs to create anonymized customer_id for analysis; HMAC salt must be stored securely in environment variable"
@@ -172,7 +172,7 @@
       "state_derivation": "Extract from Patient.address[0].state; filter for state_abbr='VA' or remap if needed",
       "period_derivation": "Extract from Encounter.period.start, Observation.effectiveDateTime, etc.; truncate to YYYYMM",
       "key_field": "Patient.id",
-      "customer_id_transform": "HMAC_SHA256(Patient.id, ENV:CAPSTONE_HMAC_SALT)",
+      "customer_id_transform": "HMAC_SHA256(Patient.id, ENV:PIPELINE_HMAC_SALT)",
       "date_fields": [
         "Patient.birthDate",
         "Encounter.period.start",
@@ -211,7 +211,7 @@
     {
       "step": 3,
       "name": "apply_customer_id_hash",
-      "description": "For Synthea only: generate customer_id via HMAC_SHA256(patient_id, CAPSTONE_HMAC_SALT)"
+      "description": "For Synthea only: generate customer_id via HMAC_SHA256(patient_id, PIPELINE_HMAC_SALT)"
     },
     {
       "step": 4,
@@ -281,9 +281,10 @@
     "Synthea synthetic patients default to Massachusetts locations; may need to remap address.state to 'VA' for this analysis.",
     "VDH data is inherently Virginia-specific (133 localities); state_abbr is always 'VA'.",
     "NIH chest X-ray data typically lacks patient geography; most records will have nih_geo_limited flag and nih_cxr_images=0.",
-    "CAPSTONE_HMAC_SALT environment variable must be set before running transformation pipeline; never commit salt to repository.",
+    "PIPELINE_HMAC_SALT environment variable must be set before running transformation pipeline; never commit salt to repository.",
     "All dates should be validated and standardized to ISO 8601 format before truncation to YYYYMM.",
     "Validation flags are additive; a single record may have multiple flags set.",
     "For NHANES weighted projections, consult CDC analytic guidelines: https://wwwn.cdc.gov/nchs/nhanes/analyticguidelines.aspx"
   ]
 }
+

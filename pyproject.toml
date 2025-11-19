@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "wgu-d610-capstone"
+name = "health-data-lake"
 version = "1.0.0"
-description = "WGU D610 Capstone: Synthetic Health Data Processing Pipeline Performance Analysis"
+description = "Synthetic Health Data Processing Pipeline Performance Analysis"
 requires-python = ">=3.11,<3.13"
 # Dependencies are managed in requirements.txt for reproducibility
 

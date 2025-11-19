@@ -1,321 +1,189 @@
-# WGU D610 Capstone: Synthetic Health Data Processing Pipeline
+# Offline SQL Data Lake for Multi-Modal Health Data Integration
 
-**A Paired t-Test Analysis of a Serverless FHIR Lakehouse for Streamlined and Consistent Rural Health Data Exchange**
+This repository implements a fully offline, standards-based data ingestion pipeline for healthcare records using FHIR, CSV, SAS, and DICOM formats. Designed for small networks and rural health providers, it offers a privacy-preserving alternative to cloud-native data lakes—delivering speed, interoperability, and analytical readiness without requiring internet access.
 
----
+## Core Features
 
-**WGU Capstone Project** — Analysis of data processing pipeline performance for multi-source health data integration, focusing on validation accuracy and latency characteristics.
+- **Multi-format ingestion**: Supports FHIR JSON, SAS XPT, CSV, and DICOM imaging metadata
+- **Three-tier pipeline**: Bronze (raw ingestion), Silver (validation & cleaning), and Gold (curated integration)
+- **Validation**: Configurable via Great Expectations with both strict and relaxed schema profiles
+- **Privacy-preserving design**: HMAC-SHA256 pseudonymization with optional key rotation support
+- **Serverless architecture**: Built entirely with Python, DuckDB, and filesystem-based workflows
 
-## 🎯 Project Scope
+## Performance Highlights
 
-This project implements and evaluates a serverless FHIR data processing pipeline that integrates synthetic health data from multiple sources (Synthea, NHANES, VDH, NIH). The analysis examines:
+- **Median processing time**: ~16 seconds per file
+- **Validation success rate**: >95% using relaxed profile
+- **Latency improvement over manual workflows**: >50×
+- Compatible with NHANES, Synthea, VDH, and DICOM datasets
 
-- Pipeline validation pass rates across data sources
-- Processing latency distribution and determinants  
-- Impact of data quality flags on performance metrics
-- Statistical comparison of processing outcomes
+## Architecture
 
-**Key Deliverable**: A reproducible data pipeline with validated outputs suitable for comparative performance analysis. See [`src/pipeline/run_pipeline.py`](src/pipeline/run_pipeline.py) for the main orchestration script and [`notebooks/01_exploratory_data_analysis.ipynb`](notebooks/01_exploratory_data_analysis.ipynb) for interactive demonstration.
+### Data Pipeline (Medallion Architecture)
 
-## 📊 Datasets & Licensing
+```
+data/raw/          → Bronze (raw files, untouched)
+data/interim/      → Silver (validated, cleaned)
+data/processed/    → Gold (curated, analysis-ready)
+```
 
-All data used in this project is either **synthetic** or **publicly licensed**:
+### Key Components
 
-- **Synthea**: Synthetic FHIR R4 patient records (Apache 2.0 license)
-- **NHANES**: CDC National Health and Nutrition Examination Survey (public domain)
-- **VDH**: Virginia Department of Health public health statistics (public domain)
-- **NIH**: Chest X-ray metadata from NIH Clinical Center (CC0 license)
+- **Ingestion**: Format-specific processors for FHIR, XPT, CSV, DICOM
+- **Validation**: Rule-based validation with Great Expectations
+- **Pseudonymization**: HMAC-SHA256 with configurable salt
+- **Analytics**: DuckDB SQL engine for local querying
 
-**Security Note**: No credentials, API keys, or protected health information (PHI) are stored in this repository. All patient identifiers are hashed using HMAC-SHA256 for privacy-preserving linkage.
-
-## 🚀 Quickstart (Grader Path)
-
-This repository includes a **small processed sample** for grading purposes. The full data acquisition pipeline is documented but not required for evaluation.
+## Quick Start
 
 ### Prerequisites
 
-- Python 3.11 (pinned for deterministic dependency resolution)
+- Python 3.11+
 - 2 GB free disk space
-- No network access required (uses committed processed data)
+- No network access required (fully offline)
 
-### Setup
+### Installation
 
 ```bash
-# Create virtual environment
-python -m venv .venv
+# Clone repository
+git clone https://github.com/rcmiller01/health-data-lake.git
+cd health-data-lake
 
-# Install dependencies (pinned versions from requirements.txt)
-python -m pip install -U pip
+# Set up environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
-
-# Install pre-commit hooks (optional)
-pre-commit install
 ```
 
-### Validation (One-Command Smoke Test)
+### Basic Usage
 
 ```bash
-# Run all tests and generate minimal output (<2 minutes)
-make smoke
+# Set environment variable for pseudonymization
+export PIPELINE_HMAC_SALT='your-secret-salt-value'  # On Windows: set or $env:
+
+# Run full pipeline
+python run_pipeline.py --source_dir data/raw --output_dir data/processed
+
+# Or use individual processors
+python -m src.pipeline.synthea_processor
+python -m src.pipeline.nhanes_processor
 ```
 
-This command:
-1. Loads processed sample from `data/processed/cohort_fact_va.csv`
-2. Runs validation tests (`pytest -q`)
-3. Generates summary statistics
-
-### Full Pipeline Execution
+### Run with Make
 
 ```bash
-# Run complete pipeline (uses processed data, ~5 minutes)
+# Initialize environment
+make init
+
+# Run full pipeline
 make all
-```
 
-This executes:
-1. **Data loading** from `data/processed/`
-2. **Statistical analysis** (EDA, hypothesis tests)
-3. **Visualization** generation (tables and figures)
-
-**Expected Outputs**:
-- `reports/figures/publication/*.png` — Publication-ready figures
-- `reports/tables/` — Statistical tables (LaTeX/CSV format)
-- `reports/analysis_summary.txt` — Text summary of findings
-
-### Local SQL Data Lake Architecture (Optional)
-
-This project includes an **embedded SQL data lake** using DuckDB and Parquet for medical imaging analytics.
-
-**Quickstart (3 commands)**:
-```bash
-# 1. Sanitize DICOM files → Bronze layer
-make deidentify
-
-# 2. Build Silver/Gold layers with SQL transformations
-make lake
-
-# 3. Validate data quality
-make smoke
-```
-
-**Key features**:
-- **DuckDB embedded SQL engine** — No installation or external services required
-- **Medallion architecture** — Bronze (raw) → Silver (curated) → Gold (analytics)
-- **Parquet columnar storage** — Efficient analytics on imaging + patient data
-- **SQL portability** — Queries work on Athena/BigQuery/Snowflake with minimal changes
-
-**Outputs**:
-- `data/bronze/images/` — De-identified DICOM files (PHI scrubbed)
-- `data/silver/` — Structured Parquet (imaging_instance, patient_core)
-- `data/gold/analytics/` — Joined patient-imaging datasets
-- `capstone.duckdb` — DuckDB database with external views over Parquet
-
-**SQL pipeline**:
-- `sql/00_init.sql` — Create views using `read_parquet()`
-- `sql/10_silver_curate.sql` — Type casting and validation
-- `sql/20_gold_joins.sql` — Patient-imaging joins
-- `sql/30_analytics_slices.sql` — Aggregations (modality counts, demographics)
-
-See [`docs/duckdb_overview.md`](docs/duckdb_overview.md) for architecture details and [`docs/sql_equivalents.md`](docs/sql_equivalents.md) for cloud migration guidance.
-
-## 📁 Repository Layout
-
-```
-wgu-capstone/
-├── src/                      # Source code
-│   ├── pipeline/            # Data acquisition & cleaning (636 LOC)
-│   │   ├── data_acquisition.py
-│   │   ├── data_cleaning.py
-│   │   ├── synthea_processor.py
-│   │   ├── nhanes_processor.py
-│   │   └── build_cohort_fact.py
-│   ├── analysis/            # Statistical analysis (541 LOC)
-│   │   ├── run_eda.py
-│   │   ├── run_statistical_tests.py
-│   │   └── generate_phase7_outputs.py
-│   └── visualization/       # Plotting utilities
-├── etl/                     # Data lake ETL modules
-│   ├── sanitize_dicom.py   # DICOM de-identification
-│   ├── ingest_siim_metadata.py  # Imaging metadata extraction
-│   ├── unify_patients.py   # Patient data unification
-│   ├── build_link_table.py # Synthetic patient-image linkage
-│   ├── build_gold_views.py # DuckDB SQL orchestration
-│   └── validate_quality.py # Data quality checks
-├── sql/                     # SQL transformation scripts
-│   ├── 00_init.sql         # Create views over Parquet
-│   ├── 10_silver_curate.sql  # Type casting & validation
-│   ├── 20_gold_joins.sql   # Analytics table joins
-│   └── 30_analytics_slices.sql  # Aggregations
-├── tests/                   # Pytest test suite
-│   ├── test_schema.py
-│   ├── test_assumptions.py
-│   └── test_cohort_fact_validation.py
-├── data/                    # Data directories
-│   ├── raw/                # Original source data (not committed)
-│   ├── interim/            # Intermediate processing (not committed)
-│   ├── processed/          # Final analysis-ready data (committed)
-│   │   ├── cohort_fact_va.csv      # Main analysis dataset
-│   │   └── metadata.json            # Dataset provenance
-│   ├── bronze/             # De-identified DICOM (not committed)
-│   ├── silver/             # Structured Parquet (not committed)
-│   └── gold/               # Analytics tables (not committed)
-├── reports/                 # Generated outputs
-│   ├── figures/            # PNG visualizations
-│   ├── tables/             # Statistical tables
-│   └── schema_profile.md   # Data dictionary
-├── docs/                    # Project documentation
-│   ├── phase_index.md      # Phase-to-artifact mapping
-│   ├── metrics_spec.md     # Variable definitions
-│   ├── privacy_ethics.md   # Ethics & data governance
-│   ├── duckdb_overview.md  # DuckDB architecture guide
-│   ├── sql_equivalents.md  # Cloud SQL portability
-│   └── PIPELINE_EXECUTION.md  # Technical pipeline guide
-├── resources/               # Configuration files
-│   ├── rules/*.json        # Validation rules
-│   └── join_spec.json      # Data join specification
-├── requirements.txt         # Pinned Python dependencies (single source of truth)
-├── pyproject.toml          # Tool configuration (black, ruff, pytest)
-├── Makefile                # Automation targets
-└── .github/workflows/      # CI configuration (lint, tests)
-```
-
-## 🔬 Reproducibility
-
-### Dependency Management
-
-- **All dependencies pinned** in `requirements.txt` (e.g., `pandas==2.2.3`)
-- Python version constrained to `>=3.11,<3.13` in `pyproject.toml`
-- CI runs on Python 3.11 for deterministic grading
-
-### Random Seed Management
-
-Statistical analyses and simulations use fixed seeds for reproducibility:
-
-- **Seed**: `42` (configured in `src/analysis/run_eda.py` and `src/analysis/run_statistical_tests.py`)
-- NumPy: `numpy.random.default_rng(42)`
-- Scikit-learn: `random_state=42` in all estimators
-
-### Code Quality
-
-- **Formatting**: `black` (line length 100)
-- **Linting**: `ruff` (PEP 8, security checks, import sorting)
-- **Type checking**: `mypy` (permissive mode, warns on redundant casts)
-- **Pre-commit hooks**: Auto-strip notebook outputs, format code
-
-## 🧪 Testing
-
-```bash
-# Run all tests with coverage report
+# Run tests
 make test
 
-# Run only fast tests (skip slow integration tests)
-pytest -m "not slow"
-
-# Run tests with verbose output
-pytest -v
+# Quick validation
+make smoke
 ```
 
-**Test Suite**:
-- `test_schema.py`: Validates data structure and column presence
-- `test_assumptions.py`: Checks statistical assumptions (normality, sample size)
-- `test_cohort_fact_validation.py`: Verifies CohortFact_VA table integrity
+## Outputs
 
-Tests automatically **skip** when processed data is unavailable (e.g., fresh checkout).
+- **Structured data**: `.parquet` files in `data/processed/`
+- **Validation logs**: `reports/validation_*.md`
+- **Cohort summaries**: `reports/cohort_fact_va.csv`
+- **Quality flags**: Optional flags for time/geolocation issues
 
-## 📖 Documentation Map
+## Project Structure
 
-See [`docs/phase_index.md`](docs/phase_index.md) for complete phase-to-artifact mapping.
+```
+health-data-lake/
+├── src/
+│   ├── pipeline/          # Data ingestion processors
+│   ├── analysis/          # Statistical analysis
+│   └── visualization/     # Reporting utilities
+├── tests/                 # Test suite
+├── data/
+│   ├── raw/              # Bronze layer
+│   ├── interim/          # Silver layer
+│   └── processed/        # Gold layer
+├── reports/              # Generated outputs
+│   └── figures/          # Visualizations
+├── docs/                 # Documentation
+│   ├── DUCKDB_IMPLEMENTATION.md
+│   ├── PIPELINE_EXECUTION.md
+│   └── privacy.md
+├── resources/
+│   └── rules/            # Validation rules
+├── requirements.txt      # Python dependencies
+└── Makefile             # Automation targets
+```
 
-**Key Documents**:
-- **[Phase Index](docs/phase_index.md)**: Maps capstone phases to code/reports
-- **[Metrics Specification](docs/metrics_spec.md)**: Variable definitions and derivations
-- **[Privacy & Ethics](docs/privacy_ethics.md)**: Data governance and IRB considerations
-- **[Pipeline Execution Guide](docs/PIPELINE_EXECUTION.md)**: Technical deep-dive on pipeline
+## Documentation
 
-## 🎨 Generating Figures & Tables
+- **[Pipeline Execution Guide](docs/PIPELINE_EXECUTION.md)**: Technical deep-dive
+- **[DuckDB Implementation](docs/DUCKDB_IMPLEMENTATION.md)**: SQL analytics setup
+- **[Privacy & Security](docs/privacy.md)**: HIPAA compliance and de-identification
+- **[Data Sources](docs/data_sources.md)**: Supported formats and schemas
+- **[Cleaning Plan](docs/cleaning_plan.md)**: Data transformation workflow
+
+## Data Sources Supported
+
+| Source | Format | Description |
+|--------|--------|-------------|
+| **Synthea** | FHIR JSON | Synthetic patient records (FHIR R4) |
+| **NHANES** | SAS XPT | CDC National Health Survey data |
+| **VDH** | CSV | Virginia Department of Health statistics |
+| **DICOM** | Metadata CSV | Medical imaging metadata (NIH Chest X-ray) |
+
+## Performance Metrics
+
+Results from processing test datasets:
+
+| Metric | Value |
+|--------|-------|
+| Median Latency (P50) | 16.12 seconds |
+| P95 Latency | 42.06 seconds |
+| Validation Pass Rate | 95.9% |
+| Speedup vs Manual | 56-168× |
+
+See `reports/figures/` for detailed performance charts.
+
+## Testing
 
 ```bash
-# Generate all publication figures (saves to reports/figures/publication/)
-make visualize
+# Run all tests
+pytest
 
-# Launch Jupyter Lab for interactive exploration
-make notebooks
+# Run with coverage
+pytest --cov=src --cov-report=html
+
+# Run specific test suite
+pytest tests/test_schema.py
 ```
 
-**Output Locations**:
-- `reports/figures/publication/figure1_passrate.png` — Pass rate comparison
-- `reports/figures/publication/figure2_latency.png` — Latency distribution
-- `reports/figures/publication/figure3_coverage.png` — Data coverage heatmap
-- `reports/tables/table1_descriptive.tex` — Descriptive statistics (LaTeX)
-- `reports/tables/table2_tests.csv` — Hypothesis test results
+## Contributing
 
-**Runtime**: Figure generation completes in ~3 minutes on the processed sample.
+This is a research/demonstration project. For questions or suggestions, please open an issue.
 
-## 🧹 Cleaning
+## License
 
-```bash
-# Remove all generated files (preserve raw data)
-make clean
-```
+MIT License - see [LICENSE](LICENSE) file for details.
 
-This clears:
-- `data/interim/` and `data/processed/`
-- `reports/figures/` and `reports/tables/`
-- Python caches (`__pycache__`, `.pytest_cache`)
-- Coverage reports (`.coverage`, `htmlcov/`)
+## Acknowledgments
 
-## 📋 Makefile Targets
+- **MITRE Synthea**: Synthetic patient generator
+- **CDC NHANES**: Public health survey data
+- **HL7 FHIR**: Healthcare interoperability standards
+- **DuckDB**: Embedded SQL analytics engine
 
-```bash
-make init        # Install dependencies and pre-commit hooks
-make all         # Run complete pipeline (data + analysis + viz)
-make smoke       # Quick validation test (<2 minutes)
-make data        # Data acquisition and cleaning (requires raw data)
-make analyze     # Run EDA and statistical tests
-make visualize   # Generate publication figures
-make notebooks   # Launch Jupyter Lab
-make test        # Run pytest suite
-make lint        # Check code style (black, ruff)
-make format      # Auto-format code
-make clean       # Remove generated files
-make help        # Show target descriptions
-```
+## Citation
 
-## 📦 Data Acquisition (Optional — Not Required for Grading)
-
-The `data/raw/` directory is **empty by default**. Graders should use the committed processed sample in `data/processed/`.
-
-For full reproducibility (optional), the acquisition pipeline is documented in:
-- [`docs/PIPELINE_EXECUTION.md`](docs/PIPELINE_EXECUTION.md)
-- [`src/pipeline/data_acquisition.py`](src/pipeline/data_acquisition.py)
-
-**Note**: Acquiring Synthea data requires ~10-30 minutes and ~20 GB disk space. NHANES downloads require CDC FTP access. This is **not necessary** for grading.
-
-## ⏱️ Expected Runtime
-
-On a typical machine (4-core, 16 GB RAM):
-
-| Task | Runtime |
-|------|---------|
-| `make smoke` | <2 minutes |
-| `make test` | <2 minutes |
-| `make analyze` | 3-5 minutes |
-| `make visualize` | 2-3 minutes |
-| `make all` | 5-10 minutes |
-| Full data acquisition | 30-60 minutes (optional) |
-
-## 📄 License & Academic Integrity
-
-This project is released under the **MIT License** (see [`LICENSE`](LICENSE)).
-
-All work is original and complies with WGU's academic integrity policy (see [`ACADEMIC_INTEGRITY.md`](ACADEMIC_INTEGRITY.md)).
-
-## 📚 Citation
-
-If referencing this work, please cite:
+If you reference this work, please cite:
 
 ```bibtex
-@software{wgu_capstone_2025,
-  title = {WGU D610 Capstone: Synthetic Health Data Processing Pipeline},
+@software{health_data_lake_2025,
+  title = {Offline SQL Data Lake for Multi-Modal Health Data Integration},
   author = {Miller, Robert C.},
   year = {2025},
   url = {https://github.com/rcmiller01/wgu-capstone},
@@ -323,30 +191,9 @@ If referencing this work, please cite:
 }
 ```
 
-## 🆘 Troubleshooting
+## Contact
 
-**Issue**: `ModuleNotFoundError: No module named 'src'`  
-**Fix**: Ensure virtual environment is activated and dependencies installed (`pip install -r requirements.txt`)
-
-**Issue**: Tests skip with "Processed data not available"  
-**Fix**: Expected behavior on fresh checkout. Run `make all` to generate data, or use committed `data/processed/cohort_fact_va.csv`
-
-**Issue**: Figures don't match expected outputs  
-**Fix**: Verify random seed is set to `42` in analysis scripts. Re-run `make clean && make all`
-
-**Issue**: `make` commands fail on Windows  
-**Fix**: Install `make` via Chocolatey (`choco install make`) or run Python commands directly:
-```powershell
-# Instead of 'make test'
-pytest -q
-
-# Instead of 'make all'
-python -m src.pipeline
-python -m src.analysis.run_eda
-python -m src.analysis.run_statistical_tests
-python -m src.visualization
-```
-
----
-
-**Contact**: For questions about this capstone project, please refer to the WGU course materials or contact your course instructor.
+For questions about this project:
+- **Repository**: [github.com/rcmiller01/wgu-capstone](https://github.com/rcmiller01/wgu-capstone)
+- **Issues**: Use GitHub issue tracker
+- **Email**: Available in commit history

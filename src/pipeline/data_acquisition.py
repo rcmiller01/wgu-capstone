@@ -550,7 +550,7 @@ CC0 (Public Domain)
 def main():
     """CLI entry point."""
     parser = argparse.ArgumentParser(
-        description="Acquire data sources for WGU D610 Capstone",
+        description="Acquire data sources for health data lake",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 

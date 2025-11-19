@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document demonstrates how SQL queries written for DuckDB in this capstone translate to cloud data warehouses (AWS Athena, Google BigQuery, Azure Synapse, Snowflake). The core logic remains the same—only minor syntax adjustments are needed.
+This document demonstrates how SQL queries written for DuckDB translate to cloud data warehouses (AWS Athena, Google BigQuery, Azure Synapse, Snowflake). The core logic remains the same—only minor syntax adjustments are needed.
 
 ## Patient-Imaging Join (Gold Layer)
 
@@ -39,13 +39,13 @@ CREATE EXTERNAL TABLE IF NOT EXISTS silver_patient_core (
     -- ... other columns
 )
 STORED AS PARQUET
-LOCATION 's3://my-bucket/capstone/silver/patient_core/';
+LOCATION 's3://my-bucket/healthdata/silver/patient_core/';
 
 -- Same join logic works
 CREATE TABLE gold_patient_imaging 
 WITH (
     format='PARQUET',
-    external_location='s3://my-bucket/capstone/gold/analytics/'
+    external_location='s3://my-bucket/healthdata/gold/analytics/'
 ) AS
 SELECT
     p.customer_id,
@@ -134,7 +134,7 @@ TO 'data/gold/analytics/modality_counts.parquet'
 CREATE TABLE modality_counts
 WITH (
     format='PARQUET',
-    external_location='s3://my-bucket/capstone/gold/analytics/'
+    external_location='s3://my-bucket/healthdata/gold/analytics/'
 ) AS
 SELECT
     modality,
@@ -162,7 +162,7 @@ ORDER BY n_instances DESC;
 
 -- Export to GCS if needed
 EXPORT DATA OPTIONS(
-    uri='gs://my-bucket/capstone/gold/analytics/modality_counts-*.parquet',
+    uri='gs://my-bucket/healthdata/gold/analytics/modality_counts-*.parquet',
     format='PARQUET'
 ) AS
 SELECT * FROM `project.dataset.modality_counts`;
@@ -207,7 +207,7 @@ CREATE EXTERNAL TABLE silver_patient_core (
     -- ... columns
 )
 STORED AS PARQUET
-LOCATION 's3://my-bucket/capstone/silver/patient_core/';
+LOCATION 's3://my-bucket/healthdata/silver/patient_core/';
 
 -- Then query
 SELECT * FROM silver_patient_core;
@@ -219,7 +219,7 @@ SELECT * FROM silver_patient_core;
 -- Load Parquet via bq command:
 -- bq load --source_format=PARQUET \
 --   dataset.silver_patient_core \
---   gs://my-bucket/capstone/silver/patient_core/*.parquet
+--   gs://my-bucket/healthdata/silver/patient_core/*.parquet
 
 -- Query after load
 SELECT * FROM `project.dataset.silver_patient_core`;
@@ -230,7 +230,7 @@ SELECT * FROM `project.dataset.silver_patient_core`;
 ```sql
 -- Create external stage
 CREATE STAGE my_stage
-URL='s3://my-bucket/capstone/'
+URL='s3://my-bucket/healthdata/'
 CREDENTIALS=(AWS_KEY_ID='...' AWS_SECRET_KEY='...');
 
 -- Query directly from stage
@@ -271,7 +271,7 @@ FILE_FORMAT = (TYPE = PARQUET);
 
 ## Migration Path
 
-To migrate this capstone from local DuckDB to cloud:
+To migrate from local DuckDB to cloud:
 
 1. **Upload Parquet files** to S3/GCS/Azure Blob
 2. **Create external tables** (Athena) or load data (BigQuery/Snowflake)
@@ -283,4 +283,4 @@ The deterministic seed (12345) ensures reproducible results across platforms.
 ---
 
 **Last Updated**: 2025-11-12  
-**Capstone Version**: 1.0.0
+**Version**: 1.0.0

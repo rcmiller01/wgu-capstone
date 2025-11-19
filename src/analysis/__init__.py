@@ -1,5 +1,5 @@
 """
-Analysis module for WGU D610 Capstone.
+Analysis module for health data lake.
 
 This module provides functions for exploratory data analysis,
 statistical hypothesis testing, and results visualization.

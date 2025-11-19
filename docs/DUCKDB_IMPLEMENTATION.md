@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document summarizes the implementation of a local, SQL-centric data lake for the WGU D610 Capstone project using DuckDB and Parquet files.
+This document summarizes the implementation of a local, SQL-centric data lake using DuckDB and Parquet files.
 
 **Implementation Date**: 2025-11-12  
 **Status**: ✅ Complete  
@@ -264,7 +264,7 @@ See `docs/sql_equivalents.md` for detailed examples.
 All processing is **deterministic**:
 
 1. **Seed**: `SEED = 12345` in `etl/unify_patients.py`
-2. **Hashing**: Consistent salt `"capstone_2025"` in `etl/build_link_table.py`
+2. **Hashing**: Consistent salt (configurable via environment) in `etl/build_link_table.py`
 3. **No randomness**: All SQL operations are set-based (no `RAND()`)
 4. **Parquet ordering**: Stable write order
 
@@ -300,7 +300,7 @@ make lake
 make lake-validate
 
 # Query with DuckDB CLI
-duckdb capstone.duckdb
+duckdb health_data_lake.duckdb
 ```
 
 ## Known Limitations
@@ -309,7 +309,7 @@ duckdb capstone.duckdb
    - **Workaround**: Close other DuckDB sessions before running `make lake-gold`
 
 2. **Parquet schema evolution**: Adding columns requires view recreation
-   - **Workaround**: Run `duckdb capstone.duckdb < sql/00_init.sql`
+   - **Workaround**: Run `duckdb health_data_lake.duckdb < sql/00_init.sql`
 
 3. **Large datasets**: Performance degrades beyond ~100GB on typical hardware
    - **Migration path**: Use same SQL on Athena/BigQuery for production scale
@@ -333,6 +333,6 @@ duckdb capstone.duckdb
 
 ---
 
-**Implementation**: Robert Miller  
-**Capstone**: WGU D610  
+**Version**: 1.0.0
+**Version**: 1.0.0
 **Date**: 2025-11-12

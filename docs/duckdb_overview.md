@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This capstone project uses **DuckDB** as an embedded SQL engine to power a local, file-based data lake. DuckDB enables SQL analytics directly on Parquet files without requiring external database servers or cloud infrastructure.
+This project uses **DuckDB** as an embedded SQL engine to power a local, file-based data lake. DuckDB enables SQL analytics directly on Parquet files without requiring external database servers or cloud infrastructure.
 
 ## Why DuckDB?
 
@@ -118,7 +118,7 @@ make lake
 
 ```bash
 # Open DuckDB CLI
-duckdb capstone.duckdb
+duckdb health_data_lake.duckdb
 
 # Query views
 SELECT modality, COUNT(*) 
@@ -140,7 +140,7 @@ The `etl/build_gold_views.py` module executes SQL scripts via DuckDB's Python AP
 ```python
 import duckdb
 
-conn = duckdb.connect('capstone.duckdb')
+conn = duckdb.connect('health_data_lake.duckdb')
 conn.execute("CREATE VIEW ... FROM read_parquet(...)")
 ```
 
@@ -185,7 +185,7 @@ Error: database is locked
 ```
 **Fix**: Close other DuckDB connections. Delete `.wal` file if needed:
 ```bash
-rm capstone.duckdb.wal
+rm health_data_lake.duckdb.wal
 ```
 
 ### View not found
@@ -194,7 +194,7 @@ Error: view 'bronze_imaging_instance' does not exist
 ```
 **Fix**: Run initialization script:
 ```bash
-duckdb capstone.duckdb < sql/00_init.sql
+duckdb health_data_lake.duckdb < sql/00_init.sql
 ```
 
 ### Parquet file not found
@@ -215,4 +215,4 @@ make lake-silver
 ---
 
 **Last Updated**: 2025-11-12  
-**Capstone Version**: 1.0.0
+**Version**: 1.0.0

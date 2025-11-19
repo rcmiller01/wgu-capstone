@@ -16,7 +16,7 @@ Outputs (columns for CohortFact_VA):
 - synthea_lab_oob_rate: COUNT(obs where out_of_bounds=True) / COUNT(obs) [fraction 0-1]
 
 Environment Variables:
-- CAPSTONE_HMAC_SALT: Required for customer_id hashing
+- PIPELINE_HMAC_SALT: Required for customer_id hashing
 
 Usage:
     from src.pipeline.synthea_processor import process_synthea
@@ -329,16 +329,16 @@ def process_synthea(fhir_dir: str = 'data/raw/synthea/fhir') -> pd.DataFrame:
         
     Raises:
         FileNotFoundError: If fhir_dir doesn't exist
-        EnvironmentError: If CAPSTONE_HMAC_SALT not set
+        EnvironmentError: If PIPELINE_HMAC_SALT not set
     """
     fhir_path = Path(fhir_dir)
     if not fhir_path.exists():
         raise FileNotFoundError(f"FHIR directory not found: {fhir_dir}")
     
     # Verify HMAC salt is set
-    if not os.environ.get('CAPSTONE_HMAC_SALT'):
+    if not os.environ.get('PIPELINE_HMAC_SALT'):
         raise EnvironmentError(
-            "CAPSTONE_HMAC_SALT environment variable not set. "
+            "PIPELINE_HMAC_SALT environment variable not set. "
             "Required for customer_id hashing."
         )
     
@@ -376,9 +376,9 @@ if __name__ == '__main__':
     # Demo execution
     import sys
     
-    if 'CAPSTONE_HMAC_SALT' not in os.environ:
-        print("ERROR: CAPSTONE_HMAC_SALT environment variable not set", file=sys.stderr)
-        print("Set it before running: $env:CAPSTONE_HMAC_SALT='your-secret-salt'", file=sys.stderr)
+    if 'PIPELINE_HMAC_SALT' not in os.environ:
+        print("ERROR: PIPELINE_HMAC_SALT environment variable not set", file=sys.stderr)
+        print("Set it before running: $env:PIPELINE_HMAC_SALT='your-secret-salt'", file=sys.stderr)
         sys.exit(1)
     
     # Process Synthea FHIR bundles
@@ -396,3 +396,4 @@ if __name__ == '__main__':
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     df.to_parquet(output_path, index=False)
     print(f"\nSaved to {output_path}")
+

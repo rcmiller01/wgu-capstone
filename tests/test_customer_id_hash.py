@@ -18,15 +18,15 @@ from src.pipeline.customer_id_hash import hash_customer_id, batch_hash_customer_
 
 @pytest.fixture
 def set_salt():
-    """Set CAPSTONE_HMAC_SALT for testing."""
-    original = os.environ.get('CAPSTONE_HMAC_SALT')
-    os.environ['CAPSTONE_HMAC_SALT'] = 'test-salt-for-unit-tests-only'
+    """Set PIPELINE_HMAC_SALT for testing."""
+    original = os.environ.get('PIPELINE_HMAC_SALT')
+    os.environ['PIPELINE_HMAC_SALT'] = 'test-salt-for-unit-tests-only'
     yield
     # Restore original
     if original:
-        os.environ['CAPSTONE_HMAC_SALT'] = original
+        os.environ['PIPELINE_HMAC_SALT'] = original
     else:
-        del os.environ['CAPSTONE_HMAC_SALT']
+        del os.environ['PIPELINE_HMAC_SALT']
 
 
 class TestCustomerIdHashing:
@@ -123,26 +123,26 @@ class TestCustomerIdHashing:
         patient_id = 'patient-test'
         
         # Hash with first salt
-        os.environ['CAPSTONE_HMAC_SALT'] = 'salt-one'
+        os.environ['PIPELINE_HMAC_SALT'] = 'salt-one'
         hash1 = hash_customer_id(patient_id)
         
         # Hash with second salt
-        os.environ['CAPSTONE_HMAC_SALT'] = 'salt-two'
+        os.environ['PIPELINE_HMAC_SALT'] = 'salt-two'
         hash2 = hash_customer_id(patient_id)
         
         assert hash1 != hash2, \
             "Different salts should produce different hashes"
         
         # Cleanup
-        del os.environ['CAPSTONE_HMAC_SALT']
+        del os.environ['PIPELINE_HMAC_SALT']
     
     def test_error_missing_salt(self):
-        """Test: Raises error if CAPSTONE_HMAC_SALT not set."""
+        """Test: Raises error if PIPELINE_HMAC_SALT not set."""
         # Ensure salt is not set
-        if 'CAPSTONE_HMAC_SALT' in os.environ:
-            del os.environ['CAPSTONE_HMAC_SALT']
+        if 'PIPELINE_HMAC_SALT' in os.environ:
+            del os.environ['PIPELINE_HMAC_SALT']
         
-        with pytest.raises(EnvironmentError, match="CAPSTONE_HMAC_SALT"):
+        with pytest.raises(EnvironmentError, match="PIPELINE_HMAC_SALT"):
             hash_customer_id('patient-001')
     
     def test_error_empty_input(self, set_salt):
@@ -181,7 +181,7 @@ class TestCustomerIdHashing:
 
 if __name__ == '__main__':
     # Run determinism check standalone
-    os.environ['CAPSTONE_HMAC_SALT'] = 'test-salt-standalone'
+    os.environ['PIPELINE_HMAC_SALT'] = 'test-salt-standalone'
     
     print("10-Row Determinism Check")
     print("=" * 80)
@@ -216,3 +216,4 @@ if __name__ == '__main__':
         for tid in test_ids:
             if first[tid] != second[tid]:
                 print(f"  Mismatch: {tid}")
+

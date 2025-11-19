@@ -9,7 +9,7 @@ Purpose:
 - Normalize inputs (trim whitespace, uppercase) before hashing
 
 Environment Variables:
-- CAPSTONE_HMAC_SALT: Secret salt for HMAC (required)
+- PIPELINE_HMAC_SALT: Secret salt for HMAC (required)
 
 Usage:
     from src.pipeline.customer_id_hash import hash_customer_id
@@ -31,7 +31,7 @@ def hash_customer_id(patient_id: str) -> str:
     Process:
     1. Normalize patient_id: strip whitespace, convert to uppercase
     2. Encode normalized value as UTF-8
-    3. Hash with HMAC-SHA256 using CAPSTONE_HMAC_SALT
+    3. Hash with HMAC-SHA256 using PIPELINE_HMAC_SALT
     4. Return hexdigest (64-character string)
     
     Args:
@@ -42,10 +42,10 @@ def hash_customer_id(patient_id: str) -> str:
         
     Raises:
         ValueError: If patient_id is empty after normalization
-        EnvironmentError: If CAPSTONE_HMAC_SALT not set
+        EnvironmentError: If PIPELINE_HMAC_SALT not set
         
     Examples:
-        >>> os.environ['CAPSTONE_HMAC_SALT'] = 'test-salt-123'
+        >>> os.environ['PIPELINE_HMAC_SALT'] = 'test-salt-123'
         >>> hash_customer_id('patient-abc')
         'e8f3d1c2b4a5...'  # 64 chars
         >>> hash_customer_id('  PATIENT-ABC  ')
@@ -54,10 +54,10 @@ def hash_customer_id(patient_id: str) -> str:
         True  # Deterministic
     """
     # Get salt from environment
-    salt = os.environ.get('CAPSTONE_HMAC_SALT')
+    salt = os.environ.get('PIPELINE_HMAC_SALT')
     if not salt:
         raise EnvironmentError(
-            "CAPSTONE_HMAC_SALT environment variable not set. "
+            "PIPELINE_HMAC_SALT environment variable not set. "
             "This is required for customer_id hashing."
         )
     
@@ -101,9 +101,9 @@ if __name__ == '__main__':
     # Quick demonstration
     import sys
     
-    if 'CAPSTONE_HMAC_SALT' not in os.environ:
-        print("ERROR: CAPSTONE_HMAC_SALT environment variable not set", file=sys.stderr)
-        print("Set it before running: $env:CAPSTONE_HMAC_SALT='your-secret-salt'", file=sys.stderr)
+    if 'PIPELINE_HMAC_SALT' not in os.environ:
+        print("ERROR: PIPELINE_HMAC_SALT environment variable not set", file=sys.stderr)
+        print("Set it before running: $env:PIPELINE_HMAC_SALT='your-secret-salt'", file=sys.stderr)
         sys.exit(1)
     
     # Demo with sample IDs
@@ -116,3 +116,4 @@ if __name__ == '__main__':
     
     print("\nDeterminism Check:")
     print(f"hash('patient-001') == hash('  PATIENT-001  '): {hash_customer_id('patient-001') == hash_customer_id('  PATIENT-001  ')}")
+

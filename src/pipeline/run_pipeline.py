@@ -22,7 +22,7 @@ Usage:
     python src/pipeline/run_pipeline.py
     
 Environment Variables:
-    CAPSTONE_HMAC_SALT: Required for customer_id hashing
+    PIPELINE_HMAC_SALT: Required for customer_id hashing
 """
 
 import os
@@ -32,9 +32,9 @@ from datetime import datetime
 
 def check_environment():
     """Verify required environment variables are set."""
-    if not os.environ.get('CAPSTONE_HMAC_SALT'):
-        print("ERROR: CAPSTONE_HMAC_SALT environment variable not set")
-        print("Set it before running: $env:CAPSTONE_HMAC_SALT='your-secret-salt'")
+    if not os.environ.get('PIPELINE_HMAC_SALT'):
+        print("ERROR: PIPELINE_HMAC_SALT environment variable not set")
+        print("Set it before running: $env:PIPELINE_HMAC_SALT='your-secret-salt'")
         sys.exit(1)
     
     print("✓ Environment check passed")
@@ -58,7 +58,7 @@ def run_step(step_num: int, step_name: str, func, *args, **kwargs):
 
 def main():
     """Execute full pipeline."""
-    print("WGU D610 Capstone - Data Pipeline Execution")
+    print("Health Data Lake - Data Pipeline Execution")
     print("=" * 80)
     print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
